@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Quest 02 — Tenant Isolation E2E Evidence</title>
+<style>
+body { font-family: monospace; background: #0d1117; color: #c9d1d9; padding: 20px; }
+h1 { color: #58a6ff; }
+h2 { color: #f0883e; margin-top: 30px; }
+.result { background: #161b22; border: 1px solid #30363d; padding: 12px; margin: 8px 0; border-radius: 6px; }
+.pass { border-left: 4px solid #3fb950; }
+.fail { border-left: 4px solid #f85149; }
+.status { font-weight: bold; }
+.ok { color: #3fb950; }
+.err { color: #f85149; }
+pre { white-space: pre-wrap; word-break: break-all; }
+</style>
+</head>
+<body>
+<h1>Quest 02 — Tenant Isolation E2E Evidence</h1>
+<p>Real Postgres + Real Express API + Real HTTP calls</p>
+
+<h2>1. Admin Alpha — Audit Stream (only Org Alpha entries)</h2>
+<div id="audit-a" class="result">Loading...</div>
+
+<h2>2. Admin Alpha — Fetch Org Beta's Appeal (expect 404)</h2>
+<div id="appeal-cross" class="result">Loading...</div>
+
+<h2>3. Admin Alpha — Fetch Own Appeal (expect 200)</h2>
+<div id="appeal-own" class="result">Loading...</div>
+
+<h2>4. Admin Beta — Audit Stream (only Org Beta entries)</h2>
+<div id="audit-b" class="result">Loading...</div>
+
+<script>
+const API = 'http://localhost:3099/api/v1';
+const TOKEN_A = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDAwMDAwMDAtYWFhYS1hYWFhLWFhYWEtMDAwMDAwMDAwMDAyIiwib3JnX2lkIjoiMDAwMDAwMDAtYWFhYS1hYWFhLWFhYWEtMDAwMDAwMDAwMDAxIiwicm9sZSI6IkFETUlOIiwiaWF0IjoxNzkwNjIxNjE4LCJleHAiOjE3OTA2MjUyMTh9.2Hsa9hBV7uwTXS0e27tA8zDI-3quW8xHKggTT4GXDFM';
+const TOKEN_B = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDAwMDAwMDAtYmJiYi1iYmJiLWJiYmItMDAwMDAwMDAwMDAyIiwib3JnX2lkIjoiMDAwMDAwMDAtYmJiYi1iYmJiLWJiYmItMDAwMDAwMDAwMDAxIiwicm9sZSI6IkFETUlOIiwiaWF0IjoxNzkwNjIxNjE4LCJleHAiOjE3OTA2MjUyMTh9.QNYyhQoYOXhtNUc1JWcTcztceKyck_I0nymwanTY4Nw';
+const APPEAL_BETA = 'dd795e6d-e57d-4d6a-b158-5024b9e54a21';
+const APPEAL_ALPHA = '30be5f4e-1167-4604-8efe-9bcbba146a12';
+
+async function fetchAPI(path, token) {
+  const res = await fetch(API + path, { headers: { Authorization: 'Bearer ' + token } });
+  const body = await res.text();
+  let json;
+  try { json = JSON.parse(body); } catch { json = body; }
+  return { status: res.status, body: json };
+}
+
+function render(el, data, expectStatus) {
+  const ok = data.status === expectStatus;
+  el.className = 'result ' + (ok ? 'pass' : 'fail');
+  el.innerHTML = `<span class="status ${ok ? 'ok' : 'err'}">HTTP ${data.status} ${ok ? '✓ PASS' : '✗ FAIL (expected ' + expectStatus + ')'}</span><pre>${JSON.stringify(data.body, null, 2)}</pre>`;
+}
+
+(async () => {
+  // 1. Admin A audit
+  const auditA = await fetchAPI('/audit-logs', TOKEN_A);
+  render(document.getElementById('audit-a'), auditA, 200);
+
+  // 2. Admin A cross-org appeal (expect 404)
+  const crossAppeal = await fetchAPI('/appeals/' + APPEAL_BETA, TOKEN_A);
+  render(document.getElementById('appeal-cross'), crossAppeal, 404);
+
+  // 3. Admin A own appeal (expect 200)
+  const ownAppeal = await fetchAPI('/appeals/' + APPEAL_ALPHA, TOKEN_A);
+  render(document.getElementById('appeal-own'), ownAppeal, 200);
+
+  // 4. Admin B audit
+  const auditB = await fetchAPI('/audit-logs', TOKEN_B);
+  render(document.getElementById('audit-b'), auditB, 200);
+})();
+</script>
+</body>
+</html>

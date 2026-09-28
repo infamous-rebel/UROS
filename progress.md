@@ -2452,9 +2452,9 @@ _Quest 01 verified: all components executed against real Postgres, real Express,
 
 | Status | Component | Execution Evidence | Result | Notes |
 |---|---|---|---|---|
-| IMPLEMENTED (audit) | Migration 0030_tenant_isolation.sql | Created with expand/backfill/contract for 6 tables; idempotent with IF NOT EXISTS/IF EXISTS | verified — 185 lines | audit_log stays nullable; 5 tables get NOT NULL; scope column added |
+| IMPLEMENTED (audit) | Migration 0030_tenant_isolation.sql | Applied to fresh Postgres DB (uros_q02_verify); backfill tested with pre-migration rows in uros_q02_backfill | verified — psql execution: 6 tables have org_id UUID, 6 FKs exist, CHECK chk_audit_tenant_has_org enforces (scope != 'TENANT' OR org_id IS NOT NULL), 11 indexes created, backfill correct for all 3 audit_log paths (A: candidate→org_id, B: eval_job→org_id, C: unmatchable→SYSTEM), idempotent re-run = 0 errors | scope column added; audit_log stays nullable for SYSTEM rows |
 | IMPLEMENTED (audit) | audit_helper.logAudit | INSERT now includes org_id as $1, scope as $2; all 30+ call sites updated | verified — grep confirms no call without org_id | Auto-detects scope: TENANT when org_id present, SYSTEM otherwise |
-| IMPLEMENTED (audit) | audit_log scope column | scope VARCHAR(10) NOT NULL DEFAULT 'TENANT'; CHECK constraint chk_audit_tenant_has_org | verified — migration 0030 | TENANT rows MUST have org_id; SYSTEM rows may have NULL org_id |
+| IMPLEMENTED (audit) | audit_log scope column | scope VARCHAR(10) NOT NULL DEFAULT 'TENANT'; CHECK constraint chk_audit_tenant_has_org | verified — psql: INSERT with scope='TENANT' AND org_id=NULL → REJECTED; INSERT with scope='SYSTEM' AND org_id=NULL → ACCEPTED | TENANT rows MUST have org_id; SYSTEM rows may have NULL org_id |
 | IMPLEMENTED (audit) | batch.ts orgId threading | orgId added to IsolatedBatchOptions; threaded through 4 logAudit calls | verified | runBatchIsolated + executeResumableBatch |
 | IMPLEMENTED (audit) | supervisor.ts scope | All 5 logAudit calls marked scope: "SYSTEM" | verified | SUPERVISOR/PROCESS entities are infrastructure-level |
 | IMPLEMENTED (audit) | agent_state.ts scope | Circuit breaker logAudit call marked scope: "SYSTEM" | verified | AGENT entity is infrastructure-level |
@@ -2472,8 +2472,9 @@ _Quest 01 verified: all components executed against real Postgres, real Express,
 | IMPLEMENTED (audit) | Cross-org leak sweep | grep -rn "FROM (audit_log|evaluation_results|...)" src/ — all 20 matches verified scoped | verified — 0 leaks | appeal_triage_agent fixed (SELECT/UPDATE on appeals) |
 | IMPLEMENTED (audit) | tenant_isolation.test.ts | 14 assertions: audit isolation, appeals isolation, anti-enumeration, batch isolation, dimension-scores 404, entity_id filter, no nulls, symmetric B check | verified — all 14 pass | |
 | IMPLEMENTED (audit) | tenant_isolation_guard.test.ts | Scans src/ for INSERT INTO 6 tables without org_id | verified — passes, 0 violations | |
-| IMPLEMENTED (audit) | Test fixture updates | batch_isolation.test.ts, agent_batch_restart.test.ts, agent_health.routes.test.ts param indices shifted +1; fake_rediscovery_db.ts communication_log handler updated | verified — 308 tests pass | |
-| IMPLEMENTED (audit) | Backend test suite | `npx jest --no-coverage` — 308 passing, 0 failing across 18 suites | verified | 293 original + 14 tenant isolation + 1 guard |
+| IMPLEMENTED (audit) | Test fixture updates | batch_isolation.test.ts, agent_batch_restart.test.ts, agent_health.routes.test.ts param indices shifted; fake_rediscovery_db.ts communication_log handler updated | verified — 318 tests pass | |
+| IMPLEMENTED (audit) | Backend test suite | `npx jest --no-coverage` — 318 passing, 0 failing across 19 suites | verified — executed 2026-09-28T18:51 | 293 original + 14 tenant isolation (fake-DB) + 1 guard + 10 real-DB |
+| IMPLEMENTED (audit) | Real-DB integration test | tests/integration/real_db/tenant_isolation_real.test.ts — connects to real Postgres, applies all migrations, seeds 2 orgs, 10 assertions via real Express + real pg pool + supertest HTTP | verified — 10/10 pass against qoder-test-postgres | Covers audit isolation, cross-org 404, NULL org_id checks, CHECK constraint enforcement |
 | IMPLEMENTED (audit) | UI test suite | `npx vitest run` — 46 passing, 0 failing across 11 test files | verified | |
 | IMPLEMENTED (audit) | Typecheck (backend) | `npx tsc --noEmit` — 0 errors | verified | |
 | IMPLEMENTED (audit) | Typecheck (UI) | `npx tsc --noEmit` in src/ui — 0 errors | verified | |
@@ -2481,7 +2482,9 @@ _Quest 01 verified: all components executed against real Postgres, real Express,
 | IMPLEMENTED (audit) | docs/data-model.md | Created with ER overview, tenant-scoped tables, indexes | verified | |
 | IMPLEMENTED (audit) | docs/security.md | Created with tenant isolation enforcement, testing, sweep results | verified | |
 | IMPLEMENTED (audit) | docs/rebuild-log.md | Created with Quest 02 schema changes, code changes, breaking changes | verified | |
+| IMPLEMENTED (audit) | Browser E2E evidence | docs/e2e-evidence/quest-02/ — 5 screenshots: full evidence page, Admin Alpha audit (2 entries, org_id=aaaa), cross-org appeal 404, own appeal 200, Admin Beta audit (2 entries, org_id=bbbb) | verified — real Postgres + real Express on port 3099 + Playwright browser screenshots | evidence.html makes live fetch() calls with JWT auth |
+| IMPLEMENTED (audit) | CI workflow update | .github/workflows/ci.yml: added DATABASE_URL_TEST env var for real-DB test job | verified — Postgres service container already present | Real-DB test runs in CI alongside fake-DB tests |
 
 ---
 
-_Quest 02 verified: 308 backend tests passing, 46 UI tests passing, typecheck clean, lint clean. Cross-tenant leakage structurally impossible. audit_log scope column enforces org_id for TENANT entries._
+_Quest 02 verified by execution: 318 backend tests passing (19 suites, including 10 real-DB tests against live Postgres), 46 UI tests passing, typecheck clean, lint clean. Migration 0030 applied and backfill-tested on real Postgres. CHECK constraint enforcement confirmed via psql. Browser E2E: 5 screenshots in docs/e2e-evidence/quest-02/. Cross-tenant leakage structurally impossible._
