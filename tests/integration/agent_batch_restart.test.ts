@@ -71,14 +71,14 @@ function parseJson(value: unknown): any {
 
 function auditRows(): AuditRow[] {
   return runtime().state.audit_log.map((row) => ({
-    entity_type: row.params[0],
-    entity_id: row.params[1],
-    agent_or_user: row.params[2],
-    action: row.params[3],
-    input_value: parseJson(row.params[5]),
-    output_value: parseJson(row.params[6]),
-    reason_code: row.params[7],
-    reason_comment: row.params[8],
+    entity_type: row.params[1],
+    entity_id: row.params[2],
+    agent_or_user: row.params[3],
+    action: row.params[4],
+    input_value: parseJson(row.params[6]),
+    output_value: parseJson(row.params[7]),
+    reason_code: row.params[8],
+    reason_comment: row.params[9],
   }));
 }
 

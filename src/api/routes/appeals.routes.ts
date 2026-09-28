@@ -56,14 +56,15 @@ router.post(
       }
 
       const result = await db.query(
-        `INSERT INTO appeals (candidate_id, reason_text, category, status)
-         VALUES ($1,$2,$3,'SUBMITTED')
+        `INSERT INTO appeals (candidate_id, org_id, reason_text, category, status)
+         VALUES ($1,$2,$3,$4,'SUBMITTED')
          RETURNING appeal_id, submitted_at`,
-        [candidate_id, reason_text, category]
+        [candidate_id, req.user!.org_id, reason_text, category]
       );
       const appealId = result.rows[0].appeal_id;
 
       await logAudit({
+        org_id: req.user!.org_id,
         entity_type: "APPEAL",
         entity_id: appealId,
         agent_or_user: req.user!.user_id,
@@ -167,11 +168,12 @@ router.patch(
       const resolvedAtClause = status === "RESOLVED" ? "resolved_at=now()," : "";
       const updated = await db.query(
         `UPDATE appeals SET status=$1, resolution=$2, ${resolvedAtClause} assigned_to=COALESCE(assigned_to,$3)
-         WHERE appeal_id=$4 RETURNING *`,
-        [status, resolution, req.user!.user_id, id]
+         WHERE appeal_id=$4 AND org_id=$5 RETURNING *`,
+        [status, resolution, req.user!.user_id, id, req.user!.org_id]
       );
 
       await logAudit({
+        org_id: req.user!.org_id,
         entity_type: "APPEAL",
         entity_id: id,
         agent_or_user: req.user!.user_id,

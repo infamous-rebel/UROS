@@ -115,6 +115,7 @@ export async function rankAndDedupe(batchId: string, orgId: string): Promise<voi
 
     for (const loserId of duplicateIds) {
       await logAudit({
+        org_id: orgId,
         entity_type: "CANDIDATE",
         entity_id: loserId,
         agent_or_user: "RankingAgent",
@@ -145,6 +146,7 @@ export async function rankAndDedupe(batchId: string, orgId: string): Promise<voi
   }
 
   await logAudit({
+    org_id: orgId,
     entity_type: "BATCH",
     entity_id: batchId,
     agent_or_user: "RankingAgent",

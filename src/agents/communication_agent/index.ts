@@ -29,12 +29,13 @@ export async function sendBatch(
     const resolution = resolveTemplateLanguage(templateCode, r.preferred_language, orgDefaultLanguage);
 
     await db.query(
-      `INSERT INTO communication_log (candidate_id, channel, template_code, status, language)
-       VALUES ($1,$2,$3,'SENT',$4)`,
-      [r.candidate_id, channel, resolution.resolved_template_code, resolution.language]
+      `INSERT INTO communication_log (candidate_id, org_id, channel, template_code, status, language)
+       VALUES ($1,$2,$3,$4,'SENT',$5)`,
+      [r.candidate_id, orgId, channel, resolution.resolved_template_code, resolution.language]
     );
 
     await logAudit({
+      org_id: orgId,
       entity_type: "COMMUNICATION",
       entity_id: r.candidate_id,
       agent_or_user: "CommunicationAgent",

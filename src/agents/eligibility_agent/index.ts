@@ -75,6 +75,7 @@ export async function runEligibility(
   }
 
   await logAudit({
+    org_id: candidate.org_id,
     entity_type: "ELIGIBILITY_RECOMMENDATION",
     entity_id: candidate.candidate_id,
     agent_or_user: actor,
@@ -109,7 +110,21 @@ export async function runEligibilityForCircular(
   rulePackVersionId: string,
   actor: string = "EligibilityAgent"
 ): Promise<EligibilityRecommendation[]> {
-  const candidatesRes = await db.query<Candidate>(`SELECT * FROM candidates WHERE job_circular_id=$1`, [circularId]);
+  // Quest 02: resolve org_id from the circular's candidates to scope the query.
+  // The circular_id alone is not enough — we need the org to prevent cross-tenant leakage.
+  const orgRes = await db.query<{ org_id: string }>(
+    `SELECT DISTINCT org_id FROM candidates WHERE job_circular_id=$1 LIMIT 1`,
+    [circularId]
+  );
+  const orgId = orgRes.rows[0]?.org_id;
+  if (!orgId) {
+    return [];
+  }
+
+  const candidatesRes = await db.query<Candidate>(
+    `SELECT * FROM candidates WHERE job_circular_id=$1 AND org_id=$2`,
+    [circularId, orgId]
+  );
 
   const results: EligibilityRecommendation[] = [];
   for (const candidate of candidatesRes.rows) {
@@ -119,6 +134,7 @@ export async function runEligibilityForCircular(
       // Never let one candidate's evaluation exception abort the batch —
       // matches the "never silently drops a candidate" principle.
       await logAudit({
+        org_id: candidate.org_id,
         entity_type: "ELIGIBILITY_RECOMMENDATION",
         entity_id: candidate.candidate_id,
         agent_or_user: actor,

@@ -85,9 +85,9 @@ export async function sendOutboundEmail(orgId: string, recipient: OutboundEmailR
     if (!res.ok) throw new Error(`Email API responded ${res.status}: ${res.statusText}`);
 
     await db.query(
-      `INSERT INTO communication_log (candidate_id, channel, template_code, status)
-       VALUES ($1,'EMAIL',$2,'SENT')`,
-      [recipient.candidate_id, recipient.template_code]
+      `INSERT INTO communication_log (candidate_id, org_id, channel, template_code, status)
+       VALUES ($1,$2,'EMAIL',$3,'SENT')`,
+      [recipient.candidate_id, orgId, recipient.template_code]
     );
 
     return { candidate_id: recipient.candidate_id, status: "SENT" };
@@ -96,12 +96,13 @@ export async function sendOutboundEmail(orgId: string, recipient: OutboundEmailR
     logger.error("EMAIL_SEND_FAILED", { candidate_id: recipient.candidate_id, error: message });
 
     await db.query(
-      `INSERT INTO communication_log (candidate_id, channel, template_code, status)
-       VALUES ($1,'EMAIL',$2,'FAILED')`,
-      [recipient.candidate_id, recipient.template_code]
+      `INSERT INTO communication_log (candidate_id, org_id, channel, template_code, status)
+       VALUES ($1,$2,'EMAIL',$3,'FAILED')`,
+      [recipient.candidate_id, orgId, recipient.template_code]
     );
 
     await logAudit({
+      org_id: orgId,
       entity_type: "COMMUNICATION",
       entity_id: recipient.candidate_id,
       agent_or_user: "EmailConnector",

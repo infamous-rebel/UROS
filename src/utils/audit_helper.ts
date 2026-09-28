@@ -12,10 +12,11 @@ export async function logAudit(entry: AuditLogEntry): Promise<void> {
   try {
     await db.query(
       `INSERT INTO audit_log
-        (entity_type, entity_id, agent_or_user, action, rule_id,
+        (org_id, entity_type, entity_id, agent_or_user, action, rule_id,
          input_value, output_value, reason_code, reason_comment)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [
+        entry.org_id ?? null,
         entry.entity_type,
         entry.entity_id,
         entry.agent_or_user,

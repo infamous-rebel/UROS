@@ -55,9 +55,9 @@ export async function getVerificationStatus(circularId: string, orgId: string): 
   return res.rows.map((r: any) => ({ status: r.status, count: Number(r.count) }));
 }
 
-/** Audit log report — delegates entirely to the Audit Agent's read-only query function; no duplicate query logic here. */
-export async function getAuditLogsReport(filters: AuditTrailFilters): Promise<Record<string, unknown>[]> {
-  const { entries } = await fetchAuditTrail(filters);
+/** Audit log report — delegates entirely to the Audit Agent's read-only query function; no duplicate query logic here. Quest 02: orgId is mandatory. */
+export async function getAuditLogsReport(orgId: string, filters: AuditTrailFilters): Promise<Record<string, unknown>[]> {
+  const { entries } = await fetchAuditTrail(orgId, filters);
   return entries as unknown as Record<string, unknown>[];
 }
 
@@ -76,13 +76,8 @@ export async function getReportRows(
     case "VERIFICATION_STATUS":
       return getVerificationStatus(circularId, orgId);
     case "AUDIT_LOGS":
-      // NOTE (Security Hardening Round, known gap — not fixed in this
-      // round): audit_log has no org_id column and fetchAuditTrail
-      // does not filter by org; scoping this properly requires
-      // threading org_id through logAudit() and every one of its ~30
-      // call sites, which is a larger structural change than this
-      // round's enumerated fixes. Tracked in progress.md.
-      return getAuditLogsReport({ ...auditFilters, entity_id: auditFilters?.entity_id ?? circularId });
+      // Quest 02: audit_log now has org_id and fetchAuditTrail filters by org.
+      return getAuditLogsReport(orgId, { ...auditFilters, entity_id: auditFilters?.entity_id ?? circularId });
   }
 }
 
@@ -183,6 +178,7 @@ export async function generateReport(
   const safeName = `${type.toLowerCase()}_${circularId.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
 
   await logAudit({
+    org_id: orgId,
     entity_type: "REPORT",
     entity_id: circularId,
     agent_or_user: actor,

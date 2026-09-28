@@ -80,11 +80,12 @@ export interface OtpRequestResult {
  * "delivered" via the Communication Hub.
  */
 export async function requestApplicantOtp(candidateId: string, channel: OtpChannel): Promise<OtpRequestResult> {
-  const candidateRes = await db.query(`SELECT candidate_id, email, phone_primary FROM candidates WHERE candidate_id=$1`, [candidateId]);
+  const candidateRes = await db.query(`SELECT candidate_id, org_id, email, phone_primary FROM candidates WHERE candidate_id=$1`, [candidateId]);
   if (candidateRes.rowCount === 0) {
     // Deliberately silent — do not reveal whether this ID exists.
     return { requested: true };
   }
+  const candidateOrgId = candidateRes.rows[0].org_id as string;
 
   const code = generateOtp();
   const codeHash = hashOtp(code, candidateId);
@@ -99,11 +100,12 @@ export async function requestApplicantOtp(candidateId: string, channel: OtpChann
   // communication_agent.sendBatch uses. The code itself is intentionally
   // never written to communication_log or the audit trail.
   await db.query(
-    `INSERT INTO communication_log (candidate_id, channel, template_code, status) VALUES ($1,$2,'APPLICANT_PORTAL_OTP','SENT')`,
-    [candidateId, channel]
+    `INSERT INTO communication_log (candidate_id, org_id, channel, template_code, status) VALUES ($1,$2,$3,'APPLICANT_PORTAL_OTP','SENT')`,
+    [candidateId, candidateOrgId, channel]
   );
 
   await logAudit({
+    org_id: candidateOrgId,
     entity_type: "APPLICANT_PORTAL",
     entity_id: candidateId,
     agent_or_user: "SYSTEM",
@@ -326,9 +328,9 @@ export async function getApplicantStatusView(candidateId: string, orgId: string,
     `SELECT er.*, r.field_path, r.operator, r.threshold_value, r.rule_code
      FROM evaluation_results er
      JOIN rules r ON r.rule_id = er.rule_id
-     WHERE er.candidate_id=$1
+     WHERE er.candidate_id=$1 AND er.org_id=$2
      ORDER BY er.evaluated_at DESC`,
-    [candidateId]
+    [candidateId, orgId]
   );
 
   const reasons: ApplicantReasonEntry[] = filterReasonsByVisibility(evalRes.rows, config.visible_reason_codes).map((row: any) => ({

@@ -658,6 +658,7 @@ export async function runFraudDetectionForCandidate(
   // clean results too, not only failures.
   for (const r of results) {
     await logAudit({
+      org_id: orgId,
       entity_type: "FRAUD_CHECK",
       entity_id: candidateId,
       agent_or_user: actorUserId,

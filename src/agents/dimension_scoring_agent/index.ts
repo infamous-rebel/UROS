@@ -349,6 +349,7 @@ export async function runDimensionScoring(
   });
 
   await logAudit({
+    org_id: orgId,
     entity_type: "DIMENSION_SCORE",
     entity_id: evaluationId,
     agent_or_user: actorUserId,

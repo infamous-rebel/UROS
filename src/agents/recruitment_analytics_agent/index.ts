@@ -432,6 +432,7 @@ export async function getSourceEffectivenessReport(
   };
 
   await logAudit({
+    org_id: orgId,
     entity_type: "RECRUITMENT_ANALYTICS",
     entity_id: orgId,
     agent_or_user: actor,
@@ -472,6 +473,7 @@ export async function getFunnelAnalysisReport(orgId: string, actor: string, circ
   };
 
   await logAudit({
+    org_id: orgId,
     entity_type: "RECRUITMENT_ANALYTICS",
     entity_id: circularId,
     agent_or_user: actor,
@@ -523,6 +525,7 @@ export async function getQualityHireReport(
   };
 
   await logAudit({
+    org_id: orgId,
     entity_type: "RECRUITMENT_ANALYTICS",
     entity_id: orgId,
     agent_or_user: actor,

@@ -31,7 +31,7 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const filters = req.query as unknown as z.infer<typeof QuerySchema>;
-      const result = await fetchAuditTrail(filters);
+      const result = await fetchAuditTrail(req.user!.org_id, filters);
       res.status(200).json(result);
     } catch (err) {
       next(err);
@@ -56,7 +56,7 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { candidate_id } = req.query as z.infer<typeof ConsistencyQuerySchema>;
-      const report = await checkAuditConsistency(candidate_id);
+      const report = await checkAuditConsistency(req.user!.org_id, candidate_id);
       res.status(200).json({ report });
     } catch (err) {
       next(err);

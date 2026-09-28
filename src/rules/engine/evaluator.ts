@@ -106,17 +106,18 @@ async function persist(
 
   await db.query(
     `INSERT INTO evaluation_results
-      (candidate_id, rule_id, rule_pack_version_id, input_value, status,
+      (candidate_id, org_id, rule_id, rule_pack_version_id, input_value, status,
        reason_code, confidence, distance_to_threshold, evaluated_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
     [
-      outcome.candidate_id, outcome.rule_id, outcome.rule_pack_version_id,
+      outcome.candidate_id, candidate.org_id, outcome.rule_id, outcome.rule_pack_version_id,
       JSON.stringify(outcome.input_value), outcome.status, outcome.reason_code,
       outcome.confidence, outcome.distance_to_threshold, outcome.evaluated_by,
     ]
   );
 
   await logAudit({
+    org_id: candidate.org_id,
     entity_type: "EVALUATION",
     entity_id: outcome.candidate_id,
     agent_or_user: actor,
@@ -132,6 +133,7 @@ async function persist(
 
 export async function applyHumanOverride(
   evaluationId: string,
+  orgId: string,
   reviewerId: string,
   decision: "APPROVE" | "REJECT" | "OVERRIDE",
   reasonComment: string
@@ -143,11 +145,12 @@ export async function applyHumanOverride(
   await db.query(
     `UPDATE evaluation_results
      SET human_reviewer=$1, human_decision=$2, override_reason=$3, reviewed_at=now()
-     WHERE evaluation_id=$4`,
-    [reviewerId, decision, reasonComment, evaluationId]
+     WHERE evaluation_id=$4 AND org_id=$5`,
+    [reviewerId, decision, reasonComment, evaluationId, orgId]
   );
 
   await logAudit({
+    org_id: orgId,
     entity_type: "OVERRIDE",
     entity_id: evaluationId,
     agent_or_user: reviewerId,

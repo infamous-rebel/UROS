@@ -105,14 +105,15 @@ export async function sendBulkSms(orgId: string, recipients: SmsRecipient[]): Pr
     results.push(result);
 
     await db.query(
-      `INSERT INTO communication_log (candidate_id, channel, template_code, status)
-       VALUES ($1,'SMS',$2,$3)`,
-      [recipient.candidate_id, "BULK_SMS", result.status === "SENT" ? "SENT" : "FAILED"]
+      `INSERT INTO communication_log (candidate_id, org_id, channel, template_code, status)
+       VALUES ($1,$2,'SMS',$3,$4)`,
+      [recipient.candidate_id, orgId, "BULK_SMS", result.status === "SENT" ? "SENT" : "FAILED"]
     );
   }
 
   const failedCount = results.filter((r) => r.status === "FAILED").length;
   await logAudit({
+    org_id: orgId,
     entity_type: "COMMUNICATION",
     entity_id: `sms-batch-${Date.now()}`,
     agent_or_user: "SmsProviderConnector",

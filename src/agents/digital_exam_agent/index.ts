@@ -196,6 +196,7 @@ export async function scoreDigitalSubmission(submissionId: string, orgId: string
   );
 
   await logAudit({
+    org_id: orgId,
     entity_type: "DIGITAL_EXAM_SUBMISSION",
     entity_id: submissionId,
     agent_or_user: actorUserId,
@@ -269,6 +270,7 @@ export async function gradeShortAnswer(
   );
 
   await logAudit({
+    org_id: orgId,
     entity_type: "DIGITAL_EXAM_SUBMISSION",
     entity_id: submissionId,
     agent_or_user: graderUserId,
@@ -305,6 +307,7 @@ export async function publishExam(examId: string, orgId: string, actorUserId: st
   });
 
   await logAudit({
+    org_id: orgId,
     entity_type: "DIGITAL_EXAM",
     entity_id: examId,
     agent_or_user: actorUserId,

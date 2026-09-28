@@ -42,7 +42,7 @@ export async function assignReviewer(orgId: string): Promise<string | null> {
 
 /** Runs triage on a newly submitted appeal: confirms/derives category, sets priority, assigns a reviewer. Never resolves the appeal itself. */
 export async function triageAppeal(appealId: string, orgId: string): Promise<void> {
-  const appealRes = await db.query(`SELECT * FROM appeals WHERE appeal_id=$1`, [appealId]);
+  const appealRes = await db.query(`SELECT * FROM appeals WHERE appeal_id=$1 AND org_id=$2`, [appealId, orgId]);
   if (appealRes.rowCount === 0) return;
   const appeal = appealRes.rows[0];
 
@@ -51,11 +51,12 @@ export async function triageAppeal(appealId: string, orgId: string): Promise<voi
   const reviewer = await assignReviewer(orgId);
 
   await db.query(
-    `UPDATE appeals SET status='TRIAGED', assigned_to=COALESCE($1, assigned_to) WHERE appeal_id=$2`,
-    [reviewer, appealId]
+    `UPDATE appeals SET status='TRIAGED', assigned_to=COALESCE($1, assigned_to) WHERE appeal_id=$2 AND org_id=$3`,
+    [reviewer, appealId, orgId]
   );
 
   await logAudit({
+    org_id: orgId,
     entity_type: "APPEAL",
     entity_id: appealId,
     agent_or_user: "AppealTriageAgent",

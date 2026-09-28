@@ -118,6 +118,7 @@ export async function setRediscoveryConsent(
   }
 
   await logAudit({
+    org_id: orgId,
     entity_type: "REDISCOVERY_CONSENT",
     entity_id: candidateId,
     agent_or_user: actorUserId,
@@ -426,6 +427,7 @@ export async function runRediscoveryMatch(
       suggestionsCreated.push(suggestion);
 
       await logAudit({
+        org_id: orgId,
         entity_type: "REDISCOVERY_SUGGESTION",
         entity_id: suggestion.suggestion_id,
         agent_or_user: "RediscoveryAgent",
@@ -443,6 +445,7 @@ export async function runRediscoveryMatch(
         error: message,
       });
       await logAudit({
+        org_id: orgId,
         entity_type: "REDISCOVERY_RUN",
         entity_id: params.target_circular_id,
         agent_or_user: "RediscoveryAgent",
@@ -455,6 +458,7 @@ export async function runRediscoveryMatch(
   }
 
   await logAudit({
+    org_id: orgId,
     entity_type: "REDISCOVERY_RUN",
     entity_id: params.target_circular_id,
     agent_or_user: actorUserId,
@@ -579,6 +583,7 @@ export async function reviewSuggestion(
   );
 
   await logAudit({
+    org_id: orgId,
     entity_type: "REDISCOVERY_SUGGESTION",
     entity_id: suggestionId,
     agent_or_user: actorUserId,

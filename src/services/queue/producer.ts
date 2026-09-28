@@ -59,6 +59,7 @@ export async function enqueueEvaluationJob(payload: EvaluationJobPayload): Promi
       await getBullQueue().add("run-evaluation", { job_id: insertResult.job_id }, { jobId: insertResult.job_id });
     }
     await logAudit({
+      org_id: payload.org_id,
       entity_type: "EVALUATION_JOB",
       entity_id: insertResult.job_id,
       agent_or_user: payload.requested_by,

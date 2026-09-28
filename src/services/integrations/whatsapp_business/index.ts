@@ -44,9 +44,9 @@ export async function sendTemplateMessage(
     const body = (await res.json()) as { messages: Array<{ id: string }> };
 
     await db.query(
-      `INSERT INTO communication_log (candidate_id, channel, template_code, status)
-       VALUES ($1,'WHATSAPP',$2,'SENT')`,
-      [recipient.candidate_id, recipient.template_name]
+      `INSERT INTO communication_log (candidate_id, org_id, channel, template_code, status)
+       VALUES ($1,$2,'WHATSAPP',$3,'SENT')`,
+      [recipient.candidate_id, orgId, recipient.template_name]
     );
 
     return { candidate_id: recipient.candidate_id, message_id: body.messages?.[0]?.id, status: "SENT" };
@@ -55,9 +55,9 @@ export async function sendTemplateMessage(
     logger.error("WHATSAPP_SEND_FAILED", { candidate_id: recipient.candidate_id, error: message });
 
     await db.query(
-      `INSERT INTO communication_log (candidate_id, channel, template_code, status)
-       VALUES ($1,'WHATSAPP',$2,'FAILED')`,
-      [recipient.candidate_id, recipient.template_name]
+      `INSERT INTO communication_log (candidate_id, org_id, channel, template_code, status)
+       VALUES ($1,$2,'WHATSAPP',$3,'FAILED')`,
+      [recipient.candidate_id, orgId, recipient.template_name]
     );
 
     return { candidate_id: recipient.candidate_id, status: "FAILED", last_error: message };

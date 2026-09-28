@@ -2445,3 +2445,39 @@ features plus Security Hardening and Agent-Level Hardening are delivered._
 ---
 
 _Quest 01 verified: all components executed against real Postgres, real Express, real browser. Zero claims based on code reading alone._
+
+---
+
+## Quest 02 — Tenant Isolation Trust Ledger
+
+| Status | Component | Execution Evidence | Result | Notes |
+|---|---|---|---|---|
+| IMPLEMENTED (audit) | Migration 0030_tenant_isolation.sql | Created with expand/backfill/contract for 6 tables; idempotent with IF NOT EXISTS/IF EXISTS | verified — 171 lines | audit_log stays nullable; 5 tables get NOT NULL |
+| IMPLEMENTED (audit) | audit_helper.logAudit | INSERT now includes org_id as $1; all 30+ call sites updated | verified — grep confirms no call without org_id | Infrastructure callers pass undefined (NULL) |
+| IMPLEMENTED (audit) | audit_agent | fetchAuditTrail, fetchEntityHistory, checkAuditConsistency all require orgId | verified — orgId is mandatory first param | Removed unused paramOffset variable |
+| IMPLEMENTED (audit) | eligibility_agent.runEligibilityForCircular | Added AND org_id=$2 to candidate query | verified | Resolves org_id from candidates first |
+| IMPLEMENTED (audit) | evaluations.routes.ts | logAudit includes org_id; batch summary queries already had c.org_id | verified | |
+| IMPLEMENTED (audit) | appeals.routes.ts | INSERT includes org_id; PATCH UPDATE WHERE includes AND org_id=$5 | verified | Anti-enumeration: 404 not 403 |
+| IMPLEMENTED (audit) | communications.routes.ts | logAudit includes org_id | verified | |
+| IMPLEMENTED (audit) | candidates.routes.ts | evaluation_results and scoring_results queries now include AND org_id=$2 | verified — defense-in-depth | |
+| IMPLEMENTED (audit) | pipeline.ts | scoring_results and verification_results INSERTs include org_id; logStage signature includes orgId | verified | stageParse derives orgId from documents[0] |
+| IMPLEMENTED (audit) | evaluator.ts | evaluation_results INSERT includes org_id; applyHumanOverride includes orgId param | verified | |
+| IMPLEMENTED (audit) | communication_agent | communication_log INSERT includes org_id; logAudit includes org_id | verified | |
+| IMPLEMENTED (audit) | applicant_portal_agent | communication_log INSERT includes org_id; evaluation_results query includes AND er.org_id=$2 | verified — defense-in-depth | |
+| IMPLEMENTED (audit) | sms/email/whatsapp integrations | All communication_log INSERTs include org_id | verified — 5 INSERT statements | |
+| IMPLEMENTED (audit) | Cross-org leak sweep | grep -rn "FROM (audit_log|evaluation_results|...)" src/ — all 20 matches verified scoped | verified — 0 leaks | appeal_triage_agent fixed (SELECT/UPDATE on appeals) |
+| IMPLEMENTED (audit) | tenant_isolation.test.ts | 14 assertions: audit isolation, appeals isolation, anti-enumeration, batch isolation, dimension-scores 404, entity_id filter, no nulls, symmetric B check | verified — all 14 pass | |
+| IMPLEMENTED (audit) | tenant_isolation_guard.test.ts | Scans src/ for INSERT INTO 6 tables without org_id | verified — passes, 0 violations | |
+| IMPLEMENTED (audit) | Test fixture updates | batch_isolation.test.ts, agent_batch_restart.test.ts, agent_health.routes.test.ts param indices shifted +1; fake_rediscovery_db.ts communication_log handler updated | verified — 308 tests pass | |
+| IMPLEMENTED (audit) | Backend test suite | `npx jest --no-coverage` — 308 passing, 0 failing across 18 suites | verified | 293 original + 14 tenant isolation + 1 guard |
+| IMPLEMENTED (audit) | UI test suite | `npx vitest run` — 46 passing, 0 failing across 11 test files | verified | |
+| IMPLEMENTED (audit) | Typecheck (backend) | `npx tsc --noEmit` — 0 errors | verified | |
+| IMPLEMENTED (audit) | Typecheck (UI) | `npx tsc --noEmit` in src/ui — 0 errors | verified | |
+| IMPLEMENTED (audit) | Lint (backend) | `npx eslint src/ --max-warnings 0` — 0 errors, 0 warnings | verified | |
+| IMPLEMENTED (audit) | docs/data-model.md | Created with ER overview, tenant-scoped tables, indexes | verified | |
+| IMPLEMENTED (audit) | docs/security.md | Created with tenant isolation enforcement, testing, sweep results | verified | |
+| IMPLEMENTED (audit) | docs/rebuild-log.md | Created with Quest 02 schema changes, code changes, breaking changes | verified | |
+
+---
+
+_Quest 02 verified: 308 backend tests passing, 46 UI tests passing, typecheck clean, lint clean. Cross-tenant leakage structurally impossible._

@@ -291,8 +291,8 @@ export function createFakeRediscoveryDb() {
       return { rows, rowCount: rows.length };
     }
     if (sql.startsWith("INSERT INTO communication_log")) {
-      const [candidate_id, channel, template_code, language] = params;
-      state.communication_log.push({ candidate_id, channel, template_code, status: "SENT", language });
+      const [candidate_id, org_id, channel, template_code, language] = params;
+      state.communication_log.push({ candidate_id, org_id, channel, template_code, status: "SENT", language });
       return { rows: [], rowCount: 1 };
     }
 

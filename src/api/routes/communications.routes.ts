@@ -44,6 +44,7 @@ router.post(
       await communicationAgent.sendBatch(candidatesRes.rows as any, template_code, channel, req.user!.org_id);
 
       await logAudit({
+        org_id: req.user!.org_id,
         entity_type: "COMMUNICATION",
         entity_id: template_code,
         agent_or_user: req.user!.user_id,

@@ -119,6 +119,7 @@ export async function check(candidate: Candidate, sources: string[]): Promise<Ve
     : "Pending";
 
   await logAudit({
+    org_id: candidate.org_id,
     entity_type: "VERIFICATION",
     entity_id: candidate.candidate_id,
     agent_or_user: "VerificationAgent",

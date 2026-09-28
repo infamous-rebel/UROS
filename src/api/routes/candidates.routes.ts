@@ -142,13 +142,13 @@ router.get(
         db.query(
           `SELECT rule_id, status, reason_code, confidence, distance_to_threshold,
                   human_decision, evaluated_at
-           FROM evaluation_results WHERE candidate_id=$1 ORDER BY evaluated_at DESC`,
-          [id]
+           FROM evaluation_results WHERE candidate_id=$1 AND org_id=$2 ORDER BY evaluated_at DESC`,
+          [id, req.user!.org_id]
         ),
         db.query(
           `SELECT total_score, breakdown, rank, computed_at
-           FROM scoring_results WHERE candidate_id=$1 ORDER BY computed_at DESC LIMIT 1`,
-          [id]
+           FROM scoring_results WHERE candidate_id=$1 AND org_id=$2 ORDER BY computed_at DESC LIMIT 1`,
+          [id, req.user!.org_id]
         ),
       ]);
 
@@ -202,6 +202,7 @@ router.patch(
       );
 
       await logAudit({
+        org_id: req.user!.org_id,
         entity_type: "CANDIDATE",
         entity_id: id,
         agent_or_user: req.user!.user_id,
@@ -255,6 +256,7 @@ router.patch(
       );
 
       await logAudit({
+        org_id: req.user!.org_id,
         entity_type: "CANDIDATE",
         entity_id: id,
         agent_or_user: req.user!.user_id,
@@ -350,6 +352,7 @@ router.patch(
       );
 
       await logAudit({
+        org_id: req.user!.org_id,
         entity_type: "DIMENSION_SCORE",
         entity_id: evaluation_id,
         agent_or_user: req.user!.user_id,

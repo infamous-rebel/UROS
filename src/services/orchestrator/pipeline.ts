@@ -30,8 +30,9 @@ import { AGENT_NAMES } from "../agent_runner/agents";
 import { runAgent } from "../agent_runner/runner";
 import { runBatchIsolated, runResumableBatch } from "../agent_runner/batch";
 
-async function logStage(batchId: string, stage: string, meta: Record<string, unknown> = {}) {
+async function logStage(batchId: string, stage: string, orgId: string, meta: Record<string, unknown> = {}) {
   await logAudit({
+    org_id: orgId,
     entity_type: "PIPELINE_STAGE",
     entity_id: batchId,
     agent_or_user: "Orchestrator",
@@ -69,11 +70,12 @@ export async function stageIntake(batchId: string, orgId: string): Promise<RawAp
     { batch },
     { actor: "Orchestrator", entity_type: "BATCH", entity_id: batchId }
   );
-  await logStage(batchId, "INTAKE", { count: documents.length });
+  await logStage(batchId, "INTAKE", orgId, { count: documents.length });
   return documents;
 }
 
 export async function stageParse(batchId: string, documents: RawApplicationDocument[]): Promise<void> {
+  const parseOrgId = documents[0]?.org_id ?? "";
   const summary = await runResumableBatch<RawApplicationDocument>({
     batchKey: `PARSE:${batchId}`,
     agentName: AGENT_NAMES.PARSER_EXTRACT_FIELDS,
@@ -100,7 +102,7 @@ export async function stageParse(batchId: string, documents: RawApplicationDocum
     },
     onItemFailure: (key) => flagForReview(String(key), "PARSE_ERROR"),
   });
-  await logStage(batchId, "PARSE", {
+  await logStage(batchId, "PARSE", parseOrgId, {
     count: documents.length,
     ok: summary.ok,
     failed: summary.failed,
@@ -151,7 +153,7 @@ export async function stageEligibility(
     onItemFailure: (key) => flagForReview(String(key), "ELIGIBILITY_ERROR"),
   });
 
-  await logStage(batchId, "ELIGIBILITY", {
+  await logStage(batchId, "ELIGIBILITY", orgId, {
     candidates: candidatesRes.rowCount,
     ok: summary.ok,
     failed: summary.failed,
@@ -197,13 +199,13 @@ export async function stageScoringAndRanking(batchId: string, rulePackVersionId:
         { candidate, rules: scoringRulesRes.rows },
         { actor: "Orchestrator", entity_type: "CANDIDATE", entity_id: candidate.candidate_id }
       );
-      // Quest 01: ON CONFLICT upsert using the unique index from migration 0029.
+      // Quest 02: include org_id in scoring_results INSERT.
       await db.query(
-        `INSERT INTO scoring_results (candidate_id, rule_pack_version_id, total_score, breakdown)
-         VALUES ($1,$2,$3,$4)
+        `INSERT INTO scoring_results (candidate_id, org_id, rule_pack_version_id, total_score, breakdown)
+         VALUES ($1,$2,$3,$4,$5)
          ON CONFLICT (candidate_id, rule_pack_version_id)
-         DO UPDATE SET total_score=$3, breakdown=$4, computed_at=now()`,
-        [candidate.candidate_id, rulePackVersionId, score, JSON.stringify(breakdown)]
+         DO UPDATE SET total_score=$4, breakdown=$5, computed_at=now()`,
+        [candidate.candidate_id, orgId, rulePackVersionId, score, JSON.stringify(breakdown)]
       );
       await db.query(
         `UPDATE candidates SET status='SCORED', updated_at=now() WHERE candidate_id=$1`,
@@ -219,7 +221,7 @@ export async function stageScoringAndRanking(batchId: string, rulePackVersionId:
     { batch_id: batchId, org_id: orgId },
     { actor: "Orchestrator", entity_type: "BATCH", entity_id: batchId }
   );
-  await logStage(batchId, "SCORING_RANKING", {
+  await logStage(batchId, "SCORING_RANKING", orgId, {
     count: eligibleRes.rowCount,
     ok: summary.ok,
     failed: summary.failed,
@@ -252,7 +254,7 @@ export async function stageHumanReview(batchId: string, orgId: string): Promise<
       );
     },
   });
-  await logStage(batchId, "HUMAN_REVIEW", {
+  await logStage(batchId, "HUMAN_REVIEW", orgId, {
     shortlisted: shortlist.length,
     ok: summary.ok,
     failed: summary.failed,
@@ -276,10 +278,11 @@ export async function stageVerification(batchId: string, shortlist: Candidate[],
         { candidate: c, sources: ["EDUCATION_BOARD", "CIB", "POLICE"] },
         { actor: "Orchestrator", entity_type: "CANDIDATE", entity_id: c.candidate_id }
       );
+      // Quest 02: include org_id in verification_results INSERT.
       await db.query(
-        `INSERT INTO verification_results (candidate_id, source, status, details)
-         VALUES ($1,$2,$3,$4)`,
-        [c.candidate_id, vResult.source, vResult.status, JSON.stringify(vResult.details)]
+        `INSERT INTO verification_results (candidate_id, org_id, source, status, details)
+         VALUES ($1,$2,$3,$4,$5)`,
+        [c.candidate_id, c.org_id, vResult.source, vResult.status, JSON.stringify(vResult.details)]
       );
       if (vResult.status === "Failed" || vResult.status === "Manual Review") {
         await flagForReview(c.candidate_id, "VERIFICATION_ISSUE");
@@ -287,7 +290,7 @@ export async function stageVerification(batchId: string, shortlist: Candidate[],
     },
     onItemFailure: (key) => flagForReview(String(key), "VERIFICATION_ERROR"),
   });
-  await logStage(batchId, "VERIFICATION", {
+  await logStage(batchId, "VERIFICATION", orgId, {
     count: shortlist.length,
     ok: summary.ok,
     failed: summary.failed,
@@ -318,7 +321,7 @@ export async function stageCommunication(batchId: string, orgId: string): Promis
       { actor: "Orchestrator", entity_type: "BATCH", entity_id: batchId }
     );
   }
-  await logStage(batchId, "COMMUNICATION", { recipients: recipients.length });
+  await logStage(batchId, "COMMUNICATION", orgId, { recipients: recipients.length });
 }
 
 export async function stageFinalApproval(batchId: string, triggeredBy: string, orgId: string): Promise<void> {
@@ -349,6 +352,7 @@ export async function stageFinalApproval(batchId: string, triggeredBy: string, o
     });
   }
   await logAudit({
+    org_id: orgId,
     entity_type: "BATCH",
     entity_id: batchId,
     agent_or_user: triggeredBy,
@@ -391,6 +395,7 @@ export async function runEvaluationPipeline(params: {
   const { batchId, orgId, rulePackVersionId, circularId, stage, triggeredBy } = params;
 
   await logAudit({
+    org_id: orgId,
     entity_type: "EVALUATION_PIPELINE",
     entity_id: batchId,
     agent_or_user: triggeredBy,
@@ -406,6 +411,7 @@ export async function runEvaluationPipeline(params: {
   }
 
   await logAudit({
+    org_id: orgId,
     entity_type: "EVALUATION_PIPELINE",
     entity_id: batchId,
     agent_or_user: triggeredBy,

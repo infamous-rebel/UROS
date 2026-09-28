@@ -43,6 +43,7 @@ async function processJob(jobId: string): Promise<void> {
 
     await db.query(`UPDATE evaluation_jobs SET status='COMPLETED', completed_at=now() WHERE job_id=$1`, [jobId]);
     await logAudit({
+      org_id: job.org_id,
       entity_type: "EVALUATION_JOB",
       entity_id: jobId,
       agent_or_user: "QueueConsumer",
@@ -57,6 +58,7 @@ async function processJob(jobId: string): Promise<void> {
       jobId,
     ]);
     await logAudit({
+      org_id: job.org_id,
       entity_type: "EVALUATION_JOB",
       entity_id: jobId,
       agent_or_user: "QueueConsumer",

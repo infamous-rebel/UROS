@@ -314,12 +314,12 @@ export const AGENT_REGISTRATIONS: AgentRegistration<any, any>[] = [
   {
     name: AGENT_NAMES.AUDIT_FETCH_TRAIL,
     agent_class: "analytics",
-    handler: (i: { filters?: any }) => auditAgent.fetchAuditTrail(i?.filters ?? {}),
+    handler: (i: { org_id: string; filters?: any }) => auditAgent.fetchAuditTrail(i.org_id, i?.filters ?? {}),
   },
   {
     name: AGENT_NAMES.AUDIT_CHECK_CONSISTENCY,
     agent_class: "analytics",
-    handler: (i: { candidate_id?: string }) => auditAgent.checkAuditConsistency(i?.candidate_id),
+    handler: (i: { org_id: string; candidate_id?: string }) => auditAgent.checkAuditConsistency(i.org_id, i?.candidate_id),
   },
 
   // ---- HR ops / task logs / onboarding / offboarding ----

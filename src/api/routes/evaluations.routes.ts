@@ -120,6 +120,7 @@ router.post(
       }
 
       await logAudit({
+        org_id: orgId,
         entity_type: "DIMENSION_RUN",
         entity_id: orgId,
         agent_or_user: req.user!.user_id,
