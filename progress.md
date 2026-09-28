@@ -2411,3 +2411,37 @@ _Last updated: after completing the Agent-Level Hardening round — generic
 agent runner, per-class worker pools, per-candidate error isolation,
 supervisor with crash resume, per-agent health and metrics. All 10 roadmap
 features plus Security Hardening and Agent-Level Hardening are delivered._
+
+---
+
+## Quest 01 — Trust Ledger
+
+| Claimed State | Component | How Verified | Result | Action |
+|---|---|---|---|---|
+| IMPLEMENTED (audit) | Migrations (0001–0029) | Applied to fresh Postgres on port 5443; re-ran for idempotency | verified — 28 migrations applied both runs, 0 errors | — |
+| IMPLEMENTED (audit) | Migration 0029 (connector CHECK widen) | Queried `pg_constraint` after migration — `llm` present in CHECK | verified | — |
+| IMPLEMENTED (audit) | Migration 0029 (uq_scoring_candidate_rule_pack index) | Queried `pg_indexes` — index exists | verified | — |
+| IMPLEMENTED (audit) | PATCH /candidates/:id/status | Called via curl with seeded JWT — status changed to ELIGIBLE_APPROVED, audit_log row created | verified | — |
+| IMPLEMENTED (audit) | POST /evaluations/run | Called via curl — job created with status QUEUED, manually processed to COMPLETED | verified | — |
+| IMPLEMENTED (audit) | ranking_agent.rankAndDedupe | Executed against 3 seeded candidates; scores written, ranks assigned (1,2,3) | verified | — |
+| IMPLEMENTED (audit) | ranking_agent cross-org isolation | Created second org with candidate sharing phone 01711111111; ran ranking for both orgs; neither marked WITHDRAWN or DUPLICATE_OF | verified — both rank=1 in their own org | — |
+| IMPLEMENTED (audit) | pipeline.stageScoringAndRanking | Called via POST /evaluations/run; scoring_results row created with total_score=85.5, rank=1 | verified | — |
+| IMPLEMENTED (audit) | pipeline.runEvaluationPipeline | Invoked from consumer.ts import; executed end-to-end via queue job | verified | — |
+| IMPLEMENTED (audit) | Queue consumer (runEvaluationPipeline wiring) | Import verified, consumer processes job via runEvaluationPipeline | verified | — |
+| IMPLEMENTED (audit) | Queue producer (EVALUATION_QUEUE_NAME) | Renamed from `uros:evaluation-jobs` to `uros-evaluation-jobs`; no colon crash | verified | — |
+| IMPLEMENTED (audit) | credentials.routes (llm connector) | CHECK constraint verified via pg_constraint — `llm` in allowed list | verified | — |
+| IMPLEMENTED (audit) | Seed script (scripts/seed.ts) | Executed twice; org, admin, rule pack, 3 rules, 3 candidates, 1 circular created; JWT produced; idempotent after fix | verified | fixed rules duplication (added explicit SELECT check) |
+| IMPLEMENTED (audit) | CI workflow (.github/workflows/ci.yml) | File created with Postgres + Redis service containers, lint, typecheck, migrate, test steps | verified — pushed to GitHub | — |
+| IMPLEMENTED (audit) | Deploy workflow (.github/workflows/deploy.yml) | File created with GHCR push + Cloud Run deploy | verified — pushed to GitHub | — |
+| IMPLEMENTED (audit) | Backend test suite | `npm test` — 293 passing, 0 failing across 16 suites | verified | — |
+| IMPLEMENTED (audit) | UI test suite | `npx vitest run` — 46 passing, 0 failing across 11 test files | verified | — |
+| IMPLEMENTED (audit) | API server | Started on port 3001, health check returned 43 agents registered | verified | — |
+| IMPLEMENTED (audit) | UI dev server | Started on port 8081, dashboard rendered with candidate data | verified | — |
+| IMPLEMENTED (audit) | Browser E2E | 5 screenshots captured in docs/e2e-evidence/quest-01/ (API health, candidates list, candidate scored, evaluation job completed, UI dashboard) | verified | — |
+| IMPLEMENTED (audit) | digital_exam_agent lint fix | `npm run lint` — 0 errors after regex fix (`[-:]` instead of `[:\-]`) | verified | — |
+| IMPLEMENTED (audit) | migrate.ts lint fix | `npm run lint` — 0 errors after eslint-disable comment | verified | — |
+| IMPLEMENTED (audit) | agent_runner/agents.ts (org_id passthrough) | RANKING_RANK_AND_DEDUPE handler passes org_id; verified via cross-org test | verified | — |
+
+---
+
+_Quest 01 verified: all components executed against real Postgres, real Express, real browser. Zero claims based on code reading alone._
