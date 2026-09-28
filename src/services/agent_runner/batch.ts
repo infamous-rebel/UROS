@@ -714,7 +714,9 @@ async function executeResumableBatch<T, K extends string = string, R = unknown>(
   let okCount = 0;
   let newFailures = 0;
   let checkpointingAvailable = row !== null;
-  let currentFencingToken = fencingToken;
+  // Fencing token is stable for this process's lifetime: only beginBatch and
+  // recoverInterruptedBatches increment it; heartbeat/checkpoint do not.
+  const currentFencingToken = fencingToken;
 
   // Start heartbeat — MUST be cleared in finally block
   const stopHeartbeat = startHeartbeat(batchKey, env.AGENT_BATCH_LEASE_MS, env.AGENT_BATCH_HEARTBEAT_MS);
