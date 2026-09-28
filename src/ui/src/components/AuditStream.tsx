@@ -1,0 +1,60 @@
+import { useAuditStream } from "../api/hooks";
+import { getToken, ApiError } from "../api/client";
+
+export function AuditStream() {
+  const { data, isLoading, isError, error } = useAuditStream();
+  const hasToken = !!getToken();
+
+  const forbidden = error instanceof ApiError && error.status === 403;
+
+  return (
+    <div className="flex h-full flex-col rounded-lg border border-border-soft bg-surface p-4">
+      <h2 className="mb-3 text-sm font-semibold text-text-primary">Audit Stream</h2>
+
+      {!hasToken ? (
+        <EmptyState message="Connect with a dev token to view the audit trail." />
+      ) : isLoading ? (
+        <EmptyState message="Loading recent activity…" />
+      ) : forbidden ? (
+        <EmptyState message="This account's role doesn't have audit-log access (Admin or Auditor only)." />
+      ) : isError ? (
+        <EmptyState message="Could not reach the audit log API." tone="danger" />
+      ) : !data || data.entries.length === 0 ? (
+        <EmptyState message="No audit activity recorded yet for this organization." />
+      ) : (
+        <ul className="flex-1 space-y-2 overflow-auto">
+          {data.entries.map((entry) => (
+            <li key={entry.audit_id} className="rounded-md border border-border-soft p-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-text-primary">{entry.action}</span>
+                <span className="text-text-secondary">{new Date(entry.timestamp).toLocaleTimeString()}</span>
+              </div>
+              <div className="mt-1 text-text-secondary">
+                <ActorBadge actor={entry.agent_or_user} /> · {entry.entity_type} · {entry.entity_id}
+              </div>
+              {entry.reason_code && (
+                <div className="mt-1 text-attention">{entry.reason_code}</div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ActorBadge({ actor }: { actor: string }) {
+  const isAgent = /Agent|Orchestrator|Scheduler|Connector|System/i.test(actor);
+  return (
+    <span className={`font-medium ${isAgent ? "text-agent" : "text-human"}`}>{actor}</span>
+  );
+}
+
+function EmptyState({ message, tone = "neutral" }: { message: string; tone?: "neutral" | "danger" }) {
+  const color = tone === "danger" ? "text-danger" : "text-text-secondary";
+  return (
+    <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border-soft py-8 text-center">
+      <p className={`px-4 text-sm ${color}`}>{message}</p>
+    </div>
+  );
+}

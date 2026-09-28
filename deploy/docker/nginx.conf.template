@@ -1,0 +1,45 @@
+server {
+    listen       8080;
+    server_name  _;
+
+    root   /usr/share/nginx/html;
+    index  index.html;
+
+    # Small, deterministic set of security headers as defense-in-depth
+    # alongside the API's own `helmet()` — the UI is a separate origin-
+    # serving process and should not rely solely on the API's headers.
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # Client-side routed SPA: unknown paths fall back to index.html.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Same-origin proxy to the API so the browser never needs a CORS
+    # preflight for the dashboard's own calls. ${UROS_API_UPSTREAM} is
+    # substituted at container start (nginx templates envsubst) from the
+    # UROS_API_UPSTREAM environment variable, e.g. "api:3000".
+    location /api/ {
+        proxy_pass http://${UROS_API_UPSTREAM}/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # Pass through any caller-supplied request ID so a trace stays
+        # correlated from browser -> nginx -> API; the API generates one
+        # itself if absent (see src/api/middleware/request_id.ts).
+        proxy_set_header X-Request-Id $http_x_request_id;
+    }
+
+    location /health {
+        proxy_pass http://${UROS_API_UPSTREAM}/health;
+        proxy_set_header Host $host;
+    }
+
+    # Not proxied by default: /metrics is for the internal Prometheus
+    # scraper (see docker-compose.yml, which scrapes the `api` service
+    # directly), not for browser access via the UI's public origin.
+}

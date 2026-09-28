@@ -1,0 +1,75 @@
+# syntax=docker/dockerfile:1
+#
+# UROS API image — multi-stage build.
+#
+# The same runtime image is reused for the API process, the evaluation
+# queue worker (`npm run worker`), the webhook scheduler
+# (`npm run webhook-scheduler`), and the HR-ops scheduler
+# (`npm run hr-ops-scheduler`) — docker-compose.yml overrides `command`
+# per service rather than maintaining four near-identical Dockerfiles.
+# All four are the same deterministic codebase; only the entry point differs.
+
+########################################
+# Stage 1: install all deps (incl. dev) needed to type-check and build
+########################################
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY package.json package-lock.json* ./
+# npm ci requires a lockfile; fall back to install if none is committed yet.
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+
+########################################
+# Stage 2: compile TypeScript -> dist/
+########################################
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json tsconfig.json ./
+COPY src ./src
+RUN npm run build
+
+########################################
+# Stage 3: production-only dependencies (no devDependencies, no source)
+########################################
+FROM node:20-alpine AS prod-deps
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi \
+    && npm cache clean --force
+
+########################################
+# Stage 4: minimal runtime image
+########################################
+FROM node:20-alpine AS runtime
+
+# Deterministic, auditable base: no shell tooling beyond what Alpine ships,
+# no build toolchain, no source — only compiled dist/ + pruned node_modules.
+ENV NODE_ENV=production
+WORKDIR /app
+
+# Non-root user. UID/GID fixed (not "next available") so file ownership is
+# reproducible across rebuilds and matches any host-side volume ACLs an
+# on-prem operator sets up ahead of time (see docker-compose.onprem.yml).
+RUN addgroup -g 10001 uros && adduser -D -u 10001 -G uros uros
+
+COPY --from=prod-deps --chown=uros:uros /app/node_modules ./node_modules
+COPY --from=build      --chown=uros:uros /app/dist        ./dist
+COPY --chown=uros:uros package.json ./package.json
+COPY --chown=uros:uros deploy/docker/healthcheck.js ./deploy/docker/healthcheck.js
+
+USER uros
+
+EXPOSE 3000
+
+# Interval/timeout chosen to detect a stuck process within ~1 minute
+# without flapping healthy containers under brief GC pauses or DB
+# failover blips.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD node deploy/docker/healthcheck.js
+
+# Default entrypoint runs the API server; overridden per-service in
+# docker-compose.yml for the worker and scheduler processes, e.g.:
+#   command: ["node", "dist/services/queue/consumer.js"]
+#   command: ["node", "dist/services/webhooks/scheduler.js"]
+#   command: ["node", "dist/services/hr_ops/scheduler.js"]
+CMD ["node", "dist/api/server.js"]

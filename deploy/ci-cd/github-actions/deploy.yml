@@ -1,0 +1,225 @@
+# Mirrored at .github/workflows/deploy.yml so GitHub Actions actually
+# discovers and runs it (GitHub only reads workflows from that path).
+# This copy under deploy/ci-cd/ is the deliverable location requested
+# for the ops/deploy docs; keep both in sync if you edit one.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "staging"
+        type: choice
+        options: [staging, production]
+      rollback_to_tag:
+        description: "Set to roll back instead of deploying HEAD: the image tag (git SHA) to revert to"
+        required: false
+        type: string
+
+concurrency:
+  # One deploy per (branch, environment) at a time; never auto-cancel a
+  # deploy that is already mid-flight (could leave migrations applied
+  # but the app not yet promoted).
+  group: deploy-${{ github.ref }}-${{ inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_API: ghcr.io/${{ github.repository }}/uros-api
+  IMAGE_UI: ghcr.io/${{ github.repository }}/uros-ui
+
+jobs:
+  # ---------------------------------------------------------------
+  # CI gate: nothing gets built or pushed unless this passes.
+  # Skipped entirely on a rollback run — rolling back re-deploys an
+  # image that already passed CI when it was first built.
+  # ---------------------------------------------------------------
+  ci:
+    name: Lint, Typecheck, Test, Build
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.rollback_to_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20", cache: "npm" }
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit + integration tests
+        run: npm test -- --ci --coverage
+      - name: Dependency audit (advisory — does not block the pipeline)
+        run: npm run audit || echo "::warning::npm audit reported findings on production dependencies — review before promoting this build to production"
+        continue-on-error: true
+      - name: Build TypeScript -> dist/
+        run: npm run build
+      - name: UI — install & build
+        working-directory: src/ui
+        run: |
+          npm ci
+          npm run build
+
+  # ---------------------------------------------------------------
+  # Build & push the API and UI images to GHCR, tagged with the git SHA
+  # (immutable, unambiguous rollback target) and `latest`.
+  # ---------------------------------------------------------------
+  build-and-push:
+    name: Build & Push Images
+    needs: ci
+    if: ${{ !inputs.rollback_to_tag }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: tag
+        run: echo "tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build & push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: deploy/docker/Dockerfile.api
+          push: true
+          tags: |
+            ${{ env.IMAGE_API }}:${{ steps.tag.outputs.tag }}
+            ${{ env.IMAGE_API }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Build & push UI image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: deploy/docker/Dockerfile.ui
+          push: true
+          tags: |
+            ${{ env.IMAGE_UI }}:${{ steps.tag.outputs.tag }}
+            ${{ env.IMAGE_UI }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------------
+  # Migrations run BEFORE the new image is promoted to serve traffic,
+  # and are idempotent (schema_migrations tracks applied files — see
+  # src/database/migrate.ts) so re-running this job is always safe.
+  # Deliberately NOT re-run on rollback: rolling back the application
+  # image does not roll back schema changes (see docs/runbooks/deploy.md
+  # "Rollback" — migrations must stay backward compatible with the
+  # previous release for at least one deploy cycle for this to be safe).
+  # ---------------------------------------------------------------
+  migrate:
+    name: Run Database Migrations (${{ inputs.environment || 'staging' }})
+    needs: build-and-push
+    if: ${{ !inputs.rollback_to_tag }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20", cache: "npm" }
+      - run: npm ci --omit=dev
+      - name: Run migrations against target database
+        run: npm run migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+  # ---------------------------------------------------------------
+  # Deploy the freshly built & pushed image. The actual mechanism is
+  # infra-specific (cloud vs on-prem — see docker-compose.yml vs
+  # docker-compose.onprem.yml); this step is intentionally a stub that
+  # documents the contract (which image tag, which environment) so it
+  # can be swapped for `ssh + docker compose pull/up`, an ECS/Cloud Run
+  # deploy CLI call, or a GitOps commit, without changing anything else
+  # in this workflow.
+  # ---------------------------------------------------------------
+  deploy:
+    name: Deploy to ${{ inputs.environment || 'staging' }}
+    needs: [build-and-push, migrate]
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'staging' }}
+    outputs:
+      deployed_tag: ${{ needs.build-and-push.outputs.image_tag }}
+    steps:
+      - name: Deploy image
+        run: |
+          echo "Deploying uros-api:${{ needs.build-and-push.outputs.image_tag }} and uros-ui:${{ needs.build-and-push.outputs.image_tag }} to ${{ inputs.environment || 'staging' }}"
+          echo "Replace this step with your actual deploy mechanism, e.g.:"
+          echo "  ssh deploy@host 'cd /opt/uros && IMAGE_TAG=${{ needs.build-and-push.outputs.image_tag }} docker compose -f deploy/docker/docker-compose.yml pull && docker compose -f deploy/docker/docker-compose.yml up -d'"
+          echo "or your cloud provider's container-service deploy CLI/API call."
+      - name: Record deployed tag (rollback history)
+        run: |
+          mkdir -p deploy-history
+          echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) ${{ inputs.environment || 'staging' }} ${{ needs.build-and-push.outputs.image_tag }}" >> deploy-history/${{ inputs.environment || 'staging' }}.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deploy-history-${{ inputs.environment || 'staging' }}
+          path: deploy-history/${{ inputs.environment || 'staging' }}.log
+          retention-days: 90
+
+  # ---------------------------------------------------------------
+  # Gate cutover on scripts/smoke_test.sh — the same script an operator
+  # would run by hand (docs/runbooks/deploy.md). A failure here means
+  # "do not let real users hit this deployment"; re-run this workflow
+  # with rollback_to_tag set to the last known-good tag.
+  # ---------------------------------------------------------------
+  smoke-test:
+    name: Post-deploy Smoke Test
+    needs: deploy
+    if: ${{ !inputs.rollback_to_tag }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run smoke test against deployed environment
+        run: bash scripts/smoke_test.sh "${{ secrets.SMOKE_TEST_BASE_URL }}"
+        env:
+          METRICS_TOKEN: ${{ secrets.METRICS_TOKEN }}
+      - name: Smoke test failed
+        if: failure()
+        run: |
+          echo "::error::Smoke test failed for ${{ inputs.environment || 'staging' }} at tag ${{ needs.deploy.outputs.deployed_tag }}."
+          echo "::error::Re-run this workflow with 'rollback_to_tag' set to the last known-good image tag to revert."
+
+  # ---------------------------------------------------------------
+  # Rollback path: only runs when rollback_to_tag is supplied. Reuses
+  # already-built images (never rebuilds) and re-runs the smoke test
+  # against the reverted deployment. No migration step by design — see
+  # the 'migrate' job's comment above.
+  # ---------------------------------------------------------------
+  rollback:
+    name: Rollback to ${{ inputs.rollback_to_tag }}
+    if: ${{ inputs.rollback_to_tag }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Roll back deployment
+        run: |
+          echo "Rolling back ${{ inputs.environment || 'staging' }} to uros-api:${{ inputs.rollback_to_tag }} / uros-ui:${{ inputs.rollback_to_tag }}"
+          echo "Use the same deploy mechanism as the 'deploy' job above, pointed at this tag instead of a freshly built one."
+      - name: Record rollback (history)
+        run: |
+          mkdir -p deploy-history
+          echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) ${{ inputs.environment || 'staging' }} ROLLBACK-TO ${{ inputs.rollback_to_tag }}" >> deploy-history/${{ inputs.environment || 'staging' }}.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deploy-history-${{ inputs.environment || 'staging' }}-rollback
+          path: deploy-history/${{ inputs.environment || 'staging' }}.log
+          retention-days: 90
+      - name: Post-rollback smoke test
+        run: bash scripts/smoke_test.sh "${{ secrets.SMOKE_TEST_BASE_URL }}"
+        env:
+          METRICS_TOKEN: ${{ secrets.METRICS_TOKEN }}

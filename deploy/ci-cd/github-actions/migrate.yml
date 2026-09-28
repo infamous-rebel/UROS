@@ -1,0 +1,54 @@
+# Mirrored at .github/workflows/migrate.yml so GitHub Actions actually
+# discovers and runs it. Kept as a separate workflow from deploy.yml so
+# migrations can be applied ahead of an application deploy when needed
+# (the "expand" half of an expand/contract schema change — see
+# docs/runbooks/deploy.md), not only bundled with a full release.
+name: Run Migrations (standalone)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "staging"
+        type: choice
+        options: [staging, production]
+      confirm:
+        description: "Type the environment name exactly to confirm (required for production)"
+        required: true
+        type: string
+
+jobs:
+  migrate:
+    name: Migrate ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      # Human-in-the-loop for infrastructure, same principle UROS applies
+      # to candidate decisions (file 16 §4: "override requires a mandatory
+      # reason"): a production schema change requires the operator to
+      # deliberately type "production", not just click a default button.
+      - name: Require explicit confirmation for production
+        if: ${{ inputs.environment == 'production' && inputs.confirm != 'production' }}
+        run: |
+          echo "::error::Confirmation text must exactly equal 'production' to run migrations against production. Got: '${{ inputs.confirm }}'"
+          exit 1
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20", cache: "npm" }
+      - run: npm ci --omit=dev
+
+      - name: Run migrations
+        run: npm run migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Verify target is healthy after migration
+        if: ${{ vars.HEALTH_CHECK_URL != '' }}
+        run: |
+          STATUS="$(curl -s -o /tmp/health.json -w '%{http_code}' "${{ vars.HEALTH_CHECK_URL }}/health")"
+          echo "health status: $STATUS"
+          cat /tmp/health.json
+          [ "$STATUS" = "200" ] || { echo "::error::Post-migration health check did not return 200"; exit 1; }

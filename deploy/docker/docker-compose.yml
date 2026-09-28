@@ -1,0 +1,137 @@
+# UROS — Cloud/Standard deployment.
+#
+# Usage:
+#   cp deploy/env-templates/.env.example .env   # then fill in real secrets
+#   docker compose -f deploy/docker/docker-compose.yml --env-file .env up -d --build
+#
+# `migrate` runs once to completion before `api`/`worker`/schedulers start
+# (via `condition: service_completed_successfully`), so migrations are
+# never racing application traffic. Re-running `up` re-runs `migrate`,
+# which is safe: src/database/migrate.ts tracks applied files in
+# `schema_migrations` and skips ones already applied.
+
+name: uros
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: uros
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-uros}
+      POSTGRES_DB: uros
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U uros -d uros"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Not published to the host by default — only reachable from other
+    # containers on the `uros_default` network. Uncomment for local
+    # debugging with a native psql client:
+    # ports: ["5432:5432"]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # REDIS_URL is optional in env.schema.ts: unset it in .env to run the
+    # Postgres-backed poll worker instead (see src/services/queue/consumer.ts)
+    # and drop this service entirely.
+
+  migrate:
+    build:
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile.api
+    image: uros-api:${IMAGE_TAG:-local}
+    env_file: ../../.env
+    command: ["node", "dist/database/migrate.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile.api
+    image: uros-api:${IMAGE_TAG:-local}
+    env_file: ../../.env
+    ports:
+      - "3000:3000"
+    volumes:
+      - documents:${DOCUMENT_STORAGE_PATH:-/data/uros/documents}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    # HEALTHCHECK is inherited from the image (deploy/docker/Dockerfile.api).
+
+  worker:
+    build:
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile.api
+    image: uros-api:${IMAGE_TAG:-local}
+    env_file: ../../.env
+    command: ["node", "dist/services/queue/consumer.js"]
+    volumes:
+      - documents:${DOCUMENT_STORAGE_PATH:-/data/uros/documents}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  webhook-scheduler:
+    build:
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile.api
+    image: uros-api:${IMAGE_TAG:-local}
+    env_file: ../../.env
+    command: ["node", "dist/services/webhooks/scheduler.js"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  hr-ops-scheduler:
+    build:
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile.api
+    image: uros-api:${IMAGE_TAG:-local}
+    env_file: ../../.env
+    command: ["node", "dist/services/hr_ops/scheduler.js"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  ui:
+    build:
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile.ui
+    image: uros-ui:${IMAGE_TAG:-local}
+    environment:
+      UROS_API_UPSTREAM: "api:3000"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  pg_data:
+  redis_data:
+  documents:

@@ -1,0 +1,167 @@
+# UROS — On-Premises / air-gapped deployment.
+#
+# Data-sovereignty posture (file 03 §4, file 20 §2, file 19 §6):
+#   - All persistent state lives under host-controlled bind mounts
+#     (./data/..., ./backups/...), not opaque Docker-managed volumes, so
+#     the organisation's own backup/monitoring/security tooling can see
+#     and manage the files directly.
+#   - Only the UI is published to the host network; postgres, redis, and
+#     the api/worker/scheduler processes are reachable only on the
+#     internal `uros_internal` bridge network. Point your own reverse
+#     proxy / VPN / internal DNS at the UI's published port.
+#   - True air-gap note: `docker compose build` still needs network
+#     access to pull the node/postgres/redis/nginx base images the first
+#     time. For a fully air-gapped facility, build these images on a
+#     connected machine, `docker save` them, transfer via approved
+#     removable media, and `docker load` on the target host — then this
+#     compose file runs with zero outbound network calls at runtime.
+#
+# Usage:
+#   mkdir -p data/postgres data/redis data/documents backups
+#   cp deploy/env-templates/.env.onprem.example .env   # fill in real secrets
+#   docker compose -f deploy/docker/docker-compose.onprem.yml --env-file .env up -d --build
+
+name: uros-onprem
+
+networks:
+  uros_internal:
+    driver: bridge
+    internal: false # base-image pulls need egress once; see note above.
+                     # Set true after images are built/loaded to fully seal the network.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    networks: [uros_internal]
+    environment:
+      POSTGRES_USER: uros
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set for on-prem}
+      POSTGRES_DB: uros
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U uros -d uros"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits: { cpus: "4", memory: 8g }
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    networks: [uros_internal]
+    volumes:
+      - ./data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    build:
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile.api
+    image: uros-api:${IMAGE_TAG:-onprem}
+    networks: [uros_internal]
+    env_file: ../../.env
+    command: ["node", "dist/database/migrate.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile.api
+    image: uros-api:${IMAGE_TAG:-onprem}
+    networks: [uros_internal]
+    env_file: ../../.env
+    volumes:
+      - ./data/documents:${DOCUMENT_STORAGE_PATH:-/data/uros/documents}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    restart: always
+    deploy:
+      resources:
+        limits: { cpus: "4", memory: 4g }
+    # No `ports:` — not reachable from outside the internal network.
+    # Reach it via the `ui` reverse proxy, or `docker compose exec` /
+    # an internal-only bastion for direct API debugging.
+
+  worker:
+    build:
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile.api
+    image: uros-api:${IMAGE_TAG:-onprem}
+    networks: [uros_internal]
+    env_file: ../../.env
+    command: ["node", "dist/services/queue/consumer.js"]
+    volumes:
+      - ./data/documents:${DOCUMENT_STORAGE_PATH:-/data/uros/documents}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    restart: always
+
+  webhook-scheduler:
+    build:
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile.api
+    image: uros-api:${IMAGE_TAG:-onprem}
+    networks: [uros_internal]
+    env_file: ../../.env
+    command: ["node", "dist/services/webhooks/scheduler.js"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: always
+
+  hr-ops-scheduler:
+    build:
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile.api
+    image: uros-api:${IMAGE_TAG:-onprem}
+    networks: [uros_internal]
+    env_file: ../../.env
+    command: ["node", "dist/services/hr_ops/scheduler.js"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: always
+
+  ui:
+    build:
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile.ui
+    image: uros-ui:${IMAGE_TAG:-onprem}
+    networks: [uros_internal]
+    environment:
+      UROS_API_UPSTREAM: "api:3000"
+    ports:
+      - "8080:8080" # the one published port — point your internal reverse proxy/VPN here
+    depends_on:
+      - api
+    restart: always
+
+  # Optional convenience: runs scripts/backup.sh on the same host-mounted
+  # data the way an operator would from cron, but demonstrates the exact
+  # command inside the network — actual scheduling stays external (cron/
+  # systemd timer) per docs/runbooks/backup_restore.md, since a
+  # container-internal cron adds a process supervisor UROS does not
+  # otherwise need.
+  # backup-once:
+  #   build: { context: ../../, dockerfile: deploy/docker/Dockerfile.api }
+  #   image: uros-api:${IMAGE_TAG:-onprem}
+  #   networks: [uros_internal]
+  #   env_file: ../../.env
+  #   entrypoint: ["/bin/sh", "-c"]
+  #   command: ["scripts/backup.sh"]
+  #   volumes:
+  #     - ./data/documents:${DOCUMENT_STORAGE_PATH:-/data/uros/documents}
+  #     - ./backups:/app/backups
+  #   profiles: ["manual"]

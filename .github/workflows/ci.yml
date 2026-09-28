@@ -1,0 +1,82 @@
+# Quest 01: CI workflow — postgres + redis service containers, real tests.
+#
+# Runs on every push/PR to main. Fails on any lint, typecheck, test, or
+# build failure. Postgres and Redis are real service containers (not mocks).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  ci:
+    name: Lint, Typecheck, Test, Build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: uros_test
+          POSTGRES_PASSWORD: uros_test
+          POSTGRES_DB: uros_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U uros_test -d uros_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://uros_test:uros_test@localhost:5432/uros_test
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-test-secret-must-be-at-least-32-characters-long
+      ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run migrations
+        run: npm run migrate
+
+      - name: Backend tests (unit + integration)
+        run: npm test -- --ci --forceExit
+
+      - name: UI — install & build
+        working-directory: src/ui
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build TypeScript -> dist/
+        run: npm run build
