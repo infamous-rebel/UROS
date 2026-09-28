@@ -244,7 +244,7 @@ describe("GET /health — per-agent status", () => {
     expect(res.body.agent_health.totals).toMatchObject({ failures: 2, timeouts: 2, circuits_open: 1 });
 
     // The rejections are audited, so the operator can see why work was shed.
-    const actions = auditLog().map((r) => r.params[4]);
+    const actions = auditLog().map((r) => r.params[5]);
     expect(actions).toContain("AGENT_CIRCUIT_OPEN");
     expect(actions.filter((a) => a === "AGENT_INVOCATION_FAILED")).toHaveLength(2);
 
@@ -256,7 +256,7 @@ describe("GET /health — per-agent status", () => {
     const rejected = findAgent((await request(app).get("/health")).body, TIMEOUT_AGENT);
     expect(rejected).toMatchObject({ circuit_state: "OPEN", status: "unavailable", invocations: 3, timeouts: 2, failures: 2 });
     expect(rejected.last_error).toMatch(/circuit OPEN/);
-    expect(auditLog().map((r) => r.params[4])).toContain("AGENT_CIRCUIT_REJECTED");
+    expect(auditLog().map((r) => r.params[5])).toContain("AGENT_CIRCUIT_REJECTED");
   });
 
   it("reports retries separately from failures, since a retried call is not yet a failed one", async () => {

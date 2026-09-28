@@ -76,6 +76,8 @@ export interface IsolatedBatchOptions<T, K = string, R = unknown> {
   actor?: string;
   request_id?: string;
   entity_type?: string;
+  /** Quest 02: tenant scope for audit entries. When provided, audit rows are TENANT-scoped. */
+  orgId?: string;
   /** Write one audit_log row per failed item. Default true — UROS audits everything. */
   auditFailures?: boolean;
   /**
@@ -162,6 +164,7 @@ export async function runBatchIsolated<T, K = string, R = unknown>(
     auditFailures = true,
     onItemFailure,
     concurrency = 1,
+    orgId,
   } = options;
 
   const results: BatchItemSuccess<K, R>[] = new Array(items.length);
@@ -200,6 +203,7 @@ export async function runBatchIsolated<T, K = string, R = unknown>(
       }
       if (auditFailures) {
         await logAudit({
+          org_id: orgId,
           entity_type: entityType,
           entity_id: String(key),
           agent_or_user: actor,
@@ -599,6 +603,7 @@ async function executeResumableBatch<T, K extends string = string, R = unknown>(
     actor = agentName,
     request_id: requestId,
     checkpointEvery = env.AGENT_CHECKPOINT_EVERY,
+    orgId,
   } = options;
 
   const { row, alreadyCompleted } = await beginBatch(options);
@@ -651,6 +656,7 @@ async function executeResumableBatch<T, K extends string = string, R = unknown>(
       remaining: pending.length,
     });
     await logAudit({
+      org_id: orgId,
       entity_type: "AGENT_BATCH",
       entity_id: batchKey,
       agent_or_user: actor,
@@ -724,6 +730,7 @@ async function executeResumableBatch<T, K extends string = string, R = unknown>(
       }
       if (options.auditFailures !== false) {
         await logAudit({
+          org_id: orgId,
           entity_type: options.entity_type ?? "AGENT_BATCH",
           entity_id: String(key),
           agent_or_user: actor,
@@ -749,6 +756,7 @@ async function executeResumableBatch<T, K extends string = string, R = unknown>(
   await writeCheckpoint(true);
 
   await logAudit({
+    org_id: orgId,
     entity_type: "AGENT_BATCH",
     entity_id: batchKey,
     agent_or_user: actor,

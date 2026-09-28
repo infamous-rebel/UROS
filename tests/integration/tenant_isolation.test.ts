@@ -119,7 +119,7 @@ function createFakeTenantIsolationDb() {
     }
 
     if (sql.startsWith("INSERT INTO audit_log")) {
-      const [org_id, entity_type, entity_id, agent_or_user, action] = params;
+      const [org_id, , entity_type, entity_id, agent_or_user, action] = params;
       state.audit_log.push({
         audit_id: auditSeq++,
         org_id,

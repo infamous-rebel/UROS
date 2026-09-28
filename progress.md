@@ -2452,8 +2452,12 @@ _Quest 01 verified: all components executed against real Postgres, real Express,
 
 | Status | Component | Execution Evidence | Result | Notes |
 |---|---|---|---|---|
-| IMPLEMENTED (audit) | Migration 0030_tenant_isolation.sql | Created with expand/backfill/contract for 6 tables; idempotent with IF NOT EXISTS/IF EXISTS | verified — 171 lines | audit_log stays nullable; 5 tables get NOT NULL |
-| IMPLEMENTED (audit) | audit_helper.logAudit | INSERT now includes org_id as $1; all 30+ call sites updated | verified — grep confirms no call without org_id | Infrastructure callers pass undefined (NULL) |
+| IMPLEMENTED (audit) | Migration 0030_tenant_isolation.sql | Created with expand/backfill/contract for 6 tables; idempotent with IF NOT EXISTS/IF EXISTS | verified — 185 lines | audit_log stays nullable; 5 tables get NOT NULL; scope column added |
+| IMPLEMENTED (audit) | audit_helper.logAudit | INSERT now includes org_id as $1, scope as $2; all 30+ call sites updated | verified — grep confirms no call without org_id | Auto-detects scope: TENANT when org_id present, SYSTEM otherwise |
+| IMPLEMENTED (audit) | audit_log scope column | scope VARCHAR(10) NOT NULL DEFAULT 'TENANT'; CHECK constraint chk_audit_tenant_has_org | verified — migration 0030 | TENANT rows MUST have org_id; SYSTEM rows may have NULL org_id |
+| IMPLEMENTED (audit) | batch.ts orgId threading | orgId added to IsolatedBatchOptions; threaded through 4 logAudit calls | verified | runBatchIsolated + executeResumableBatch |
+| IMPLEMENTED (audit) | supervisor.ts scope | All 5 logAudit calls marked scope: "SYSTEM" | verified | SUPERVISOR/PROCESS entities are infrastructure-level |
+| IMPLEMENTED (audit) | agent_state.ts scope | Circuit breaker logAudit call marked scope: "SYSTEM" | verified | AGENT entity is infrastructure-level |
 | IMPLEMENTED (audit) | audit_agent | fetchAuditTrail, fetchEntityHistory, checkAuditConsistency all require orgId | verified — orgId is mandatory first param | Removed unused paramOffset variable |
 | IMPLEMENTED (audit) | eligibility_agent.runEligibilityForCircular | Added AND org_id=$2 to candidate query | verified | Resolves org_id from candidates first |
 | IMPLEMENTED (audit) | evaluations.routes.ts | logAudit includes org_id; batch summary queries already had c.org_id | verified | |
@@ -2480,4 +2484,4 @@ _Quest 01 verified: all components executed against real Postgres, real Express,
 
 ---
 
-_Quest 02 verified: 308 backend tests passing, 46 UI tests passing, typecheck clean, lint clean. Cross-tenant leakage structurally impossible._
+_Quest 02 verified: 308 backend tests passing, 46 UI tests passing, typecheck clean, lint clean. Cross-tenant leakage structurally impossible. audit_log scope column enforces org_id for TENANT entries._

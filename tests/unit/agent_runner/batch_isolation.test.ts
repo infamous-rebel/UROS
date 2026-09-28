@@ -93,12 +93,12 @@ function useRediscoveryDb(): any {
 /** Audit rows written through the real `logAudit`, decoded from the fake's parameter list. */
 function auditRows(state: any): Array<{ entity_id: string; action: string; reason_code: string | null; reason_comment: string | null }> {
   return state.audit_log.map((row: any) => ({
-    entity_type: row.params[1],
-    entity_id: row.params[2],
-    agent_or_user: row.params[3],
-    action: row.params[4],
-    reason_code: row.params[8],
-    reason_comment: row.params[9],
+    entity_type: row.params[2],
+    entity_id: row.params[3],
+    agent_or_user: row.params[4],
+    action: row.params[5],
+    reason_code: row.params[9],
+    reason_comment: row.params[10],
   }));
 }
 

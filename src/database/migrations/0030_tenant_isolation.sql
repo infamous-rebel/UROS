@@ -15,6 +15,7 @@
 -- =====================================================================
 
 ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS org_id UUID;
+ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS scope VARCHAR(10) NOT NULL DEFAULT 'TENANT';
 ALTER TABLE evaluation_results ADD COLUMN IF NOT EXISTS org_id UUID;
 ALTER TABLE scoring_results ADD COLUMN IF NOT EXISTS org_id UUID;
 ALTER TABLE verification_results ADD COLUMN IF NOT EXISTS org_id UUID;
@@ -72,7 +73,7 @@ WHERE c.candidate_id = a.candidate_id
 --   (DIMENSION_SCORE, DIMENSION_RUN).
 -- Remaining rows (BATCH, PIPELINE_STAGE, AGENT_BATCH, REPORT, etc.) have
 -- entity_ids that are batch-keys or circular-names without a deterministic
--- org mapping — these stay NULL and are documented below.
+-- org mapping — these get scope='SYSTEM' and org_id stays NULL.
 
 UPDATE audit_log al
 SET org_id = COALESCE(
@@ -81,6 +82,14 @@ SET org_id = COALESCE(
   (SELECT cds.org_id FROM candidate_dimension_scores cds WHERE cds.evaluation_id::text = al.entity_id LIMIT 1)
 )
 WHERE al.org_id IS NULL;
+
+-- Mark rows that could not be backfilled as SYSTEM scope.
+-- Rows with org_id still NULL after backfill are infrastructure-level
+-- entries (SUPERVISOR, PROCESS, AGENT, AGENT_BATCH, etc.) that genuinely
+-- lack org context.
+UPDATE audit_log
+SET scope = 'SYSTEM'
+WHERE org_id IS NULL;
 
 -- =====================================================================
 -- 3. CONTRACT — NOT NULL where backfill is complete, FK, indexes
@@ -95,13 +104,17 @@ ALTER TABLE verification_results ALTER COLUMN org_id SET NOT NULL;
 ALTER TABLE communication_log ALTER COLUMN org_id SET NOT NULL;
 ALTER TABLE appeals ALTER COLUMN org_id SET NOT NULL;
 
--- audit_log: some entity types (BATCH, PIPELINE_STAGE, AGENT_BATCH,
--- REPORT, RECRUITMENT_ANALYTICS) have entity_ids that are free-form
--- batch keys or circular names with no deterministic org mapping.
--- Do NOT set NOT NULL; instead add a partial index and a CHECK that
--- new rows must carry org_id when the entity resolves to a candidate.
--- Documented exception: non-candidate entity types may have NULL org_id
--- until a batch-key → org mapping is established.
+-- audit_log: rows with scope='TENANT' MUST have org_id (enforced by CHECK).
+-- Rows with scope='SYSTEM' (infrastructure-level: SUPERVISOR, PROCESS,
+-- AGENT circuit breaker, AGENT_BATCH) may have NULL org_id.
+-- Partial index on (org_id, timestamp) WHERE org_id IS NOT NULL for
+-- efficient tenant-scoped queries.
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_audit_tenant_has_org') THEN
+    ALTER TABLE audit_log ADD CONSTRAINT chk_audit_tenant_has_org
+      CHECK (scope != 'TENANT' OR org_id IS NOT NULL);
+  END IF;
+END $$;
 
 -- Foreign keys
 DO $$ BEGIN

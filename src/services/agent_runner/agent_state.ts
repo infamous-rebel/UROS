@@ -111,6 +111,7 @@ export function getOrCreateAgentState(agentName: string, agentClass: AgentClass)
       // Circuit state changes are operationally significant decisions about
       // whether the platform will accept work — audited, not just logged.
       void logAudit({
+        scope: "SYSTEM",
         entity_type: "AGENT",
         entity_id: agentName,
         agent_or_user: "AgentRunner",

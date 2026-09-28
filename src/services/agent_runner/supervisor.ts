@@ -117,6 +117,7 @@ export function supervise(options: SupervisedTaskOptions): SupervisedTask {
           stats.finished_at = new Date().toISOString();
           logger.error("SUPERVISED_TASK_GAVE_UP", { task: name, restarts: stats.restarts, error: message });
           await logAudit({
+            scope: "SYSTEM",
             entity_type: "SUPERVISOR",
             entity_id: name,
             agent_or_user: "Supervisor",
@@ -138,6 +139,7 @@ export function supervise(options: SupervisedTaskOptions): SupervisedTask {
         const backoff = Math.min(30_000, restartBackoffMs * Math.pow(2, stats.restarts - 1));
         logger.error("SUPERVISED_TASK_RESTARTING", { task: name, restart: stats.restarts, backoff_ms: backoff, error: message });
         await logAudit({
+          scope: "SYSTEM",
           entity_type: "SUPERVISOR",
           entity_id: name,
           agent_or_user: "Supervisor",
@@ -197,6 +199,7 @@ export async function gracefulShutdown(signal: string, exit: boolean = true): Pr
     await interruptActiveBatches(`Process received ${signal}`);
     await shutdownAllPools();
     await logAudit({
+      scope: "SYSTEM",
       entity_type: "SUPERVISOR",
       entity_id: "agent-runtime",
       agent_or_user: "Supervisor",
@@ -270,6 +273,7 @@ export function installProcessSupervisor(): void {
       stack: reason instanceof Error ? reason.stack : undefined,
     });
     void logAudit({
+      scope: "SYSTEM",
       entity_type: "PROCESS",
       entity_id: "uros",
       agent_or_user: "Supervisor",
@@ -282,6 +286,7 @@ export function installProcessSupervisor(): void {
   process.on("uncaughtException", (err) => {
     logger.error("UNCAUGHT_EXCEPTION", { error: err.message, stack: err.stack });
     void logAudit({
+      scope: "SYSTEM",
       entity_type: "PROCESS",
       entity_id: "uros",
       agent_or_user: "Supervisor",
