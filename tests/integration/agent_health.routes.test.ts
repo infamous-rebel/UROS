@@ -6,8 +6,9 @@
  *
  * The database is faked to the two statements these endpoints touch
  * (`SELECT 1` for the liveness probe, `INSERT INTO audit_log` for the audit
- * trail the runner writes). `REDIS_URL` is deliberately unset so redis
- * reports `not_configured` and no test ever opens a socket.
+ * trail the runner writes). `REDIS_URL` is forced to undefined via an env
+ * mock so redis reports `not_configured` and no test ever opens a socket,
+ * regardless of whether the CI environment sets REDIS_URL.
  */
 import request from "supertest";
 import type { Express } from "express";
@@ -33,6 +34,15 @@ jest.mock("../../src/database/client", () => {
     throw new Error(`Fake health DB: unhandled query: ${sql}`);
   };
   return { db: { query, withTransaction: async (fn: any) => fn({ query }) }, pool: { query } };
+});
+
+// Force REDIS_URL to undefined so the health endpoint always reports
+// redis:"not_configured" regardless of the CI environment. The env module
+// is a singleton parsed from process.env at import time; spreading the real
+// values preserves every other field the health report reads.
+jest.mock("../../src/config/env.schema", () => {
+  const actual = jest.requireActual("../../src/config/env.schema");
+  return { env: { ...actual.env, REDIS_URL: undefined }, loadEnv: actual.loadEnv };
 });
 
 jest.mock("../../src/utils/logger", () => ({
