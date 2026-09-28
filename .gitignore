@@ -7,3 +7,6 @@ dist/
 .DS_Store
 coverage/
 .nyc_output/
+*.zip
+*.tar.gz
+uros-quest-*.zip
