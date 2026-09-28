@@ -3,7 +3,7 @@ import { z } from "zod";
 import { authenticate } from "../middleware/auth";
 import { rbac } from "../middleware/rbac";
 import { validate } from "../middleware/validate";
-import { resolveGate } from "../../services/orchestrator/hil_gates";
+import { resolveGate, listPendingGates } from "../../services/orchestrator/hil_gates";
 
 const router = Router();
 
@@ -16,6 +16,26 @@ const ResolveBodySchema = z.object({
 }).refine(
   (data) => data.decision !== "OVERRIDE" || (data.reason_comment && data.reason_comment.trim().length > 0),
   { message: "reason_comment is mandatory when decision is OVERRIDE", path: ["reason_comment"] }
+);
+
+/**
+ * GET /api/v1/gates
+ * Quest 03: Gate discovery / inbox. Lists all PENDING gates for the
+ * caller's org, newest first. The UI polls this to show humans what
+ * decisions are waiting.
+ */
+router.get(
+  "/",
+  authenticate,
+  rbac("RECRUITER", "SENIOR_RECRUITER", "ADMIN", "DEPT_HEAD", "AUDITOR"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const gates = await listPendingGates(req.user!.org_id);
+      res.status(200).json({ gates });
+    } catch (err) {
+      next(err);
+    }
+  }
 );
 
 /**

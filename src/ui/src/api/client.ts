@@ -185,3 +185,65 @@ export const PIPELINE_STAGE_STATUSES = [
 ] as const;
 
 export type PipelineStageStatus = (typeof PIPELINE_STAGE_STATUSES)[number];
+
+// ─── Quest 03 — HIL Gate Inbox ───────────────────────────────────────
+
+export interface GateSummary {
+  gate_id: string;
+  batch_id: string;
+  gate_type: string;
+  org_id: string;
+  payload: unknown;
+  created_at: string;
+}
+
+export interface GateListResponse {
+  gates: GateSummary[];
+}
+
+export interface GateDetailResponse {
+  gate_id: string;
+  batch_id: string;
+  gate_type: string;
+  org_id: string;
+  status: string;
+  payload: unknown;
+  resolved_by: string | null;
+  resolved_by_name: string | null;
+  resolved_at: string | null;
+  created_at: string;
+}
+
+export interface ResolveGateRequest {
+  decision: "APPROVE" | "REJECT" | "OVERRIDE";
+  payload?: Record<string, unknown>;
+  reason_comment: string;
+}
+
+export interface ResolveGateResponse {
+  gate_id: string;
+  status: "RESOLVED";
+  decision: string;
+  payload: unknown;
+  resolved_by: string;
+  resolved_at: string;
+}
+
+export function fetchGates(): Promise<GateListResponse> {
+  return request<GateListResponse>(`${API_V1}/gates`);
+}
+
+export function fetchGateDetail(gateId: string): Promise<GateDetailResponse> {
+  return request<GateDetailResponse>(`${API_V1}/gates/${gateId}`);
+}
+
+export function resolveGate(gateId: string, body: ResolveGateRequest): Promise<ResolveGateResponse> {
+  return request<ResolveGateResponse>(`${API_V1}/gates/${gateId}/resolve`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function fetchResolvedGateCount(hours = 24): Promise<{ count: number }> {
+  return request<{ count: number }>(`${API_V1}/gates?resolved_since=${hours}h`);
+}

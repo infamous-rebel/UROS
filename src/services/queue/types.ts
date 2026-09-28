@@ -1,4 +1,4 @@
-export type EvaluationStage = "ELIGIBILITY" | "SCORING" | "BOTH";
+export type EvaluationStage = "ELIGIBILITY" | "SCORING" | "BOTH" | "CONTINUE_FROM_GATE";
 export type JobStatus = "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED";
 
 export interface EvaluationJobPayload {
@@ -7,7 +7,9 @@ export interface EvaluationJobPayload {
   rule_pack_version_id: string;
   org_id: string;
   stage: EvaluationStage;
-  requested_by: string;
+  requested_by?: string;
+  gate_id?: string;
+  requested_by_name?: string;
 }
 
 export interface EvaluationJobRecord extends EvaluationJobPayload {

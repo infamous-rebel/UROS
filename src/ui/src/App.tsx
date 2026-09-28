@@ -18,6 +18,7 @@ import { ReferenceCheckPanel } from "./components/ReferenceCheckPanel";
 import { RecruitmentAnalyticsPanel } from "./components/RecruitmentAnalyticsPanel";
 import { OffboardingPanel } from "./components/OffboardingPanel";
 import { RediscoveryPanel } from "./components/RediscoveryPanel";
+import { HilGateInbox } from "./components/HilGateInbox";
 import { I18nProvider } from "./i18n";
 
 const TABS = [
@@ -36,6 +37,7 @@ const TABS = [
   { key: "analytics", label: "Recruitment Analytics" },
   { key: "offboarding", label: "Offboarding" },
   { key: "rediscovery", label: "Candidate Rediscovery" },
+  { key: "gates", label: "HIL Gates" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -86,6 +88,7 @@ export function App() {
           {tab === "analytics" && <PanelCard title="Recruitment Analytics & Source Effectiveness"><RecruitmentAnalyticsPanel /></PanelCard>}
           {tab === "offboarding" && <PanelCard title="Offboarding & Exit Management"><OffboardingPanel /></PanelCard>}
           {tab === "rediscovery" && <PanelCard title="Candidate Rediscovery / Talent Pool Re-engagement"><RediscoveryPanel /></PanelCard>}
+          {tab === "gates" && <PanelCard title="Human-in-the-Loop Gate Inbox"><HilGateInbox /></PanelCard>}
         </div>
 
         {/* Audit & reports sidebar: what the platform did, and whether any

@@ -126,6 +126,7 @@ function crashingProcessItem(handled: string[], crashOn: string): CrashHarness {
 beforeEach(() => {
   resetSupervisorForTests();
   runtime().state.agent_batch_progress.length = 0;
+  runtime().state.agent_batch_progress_items.length = 0;
   runtime().state.audit_log.length = 0;
   runtime().setTableAvailable(true);
 });
@@ -150,7 +151,7 @@ describe("crash mid-batch: resume from persisted state", () => {
           agentName: "test.resumable",
           items: ITEMS,
           itemKey: (item) => item,
-          checkpointEvery: 1,
+          
           actor: "operator-1",
           request_id: "req-crash-1",
           processItem,
@@ -166,14 +167,12 @@ describe("crash mid-batch: resume from persisted state", () => {
       status: "RUNNING",
       agent_name: "test.resumable",
       total_items: 5,
-      processed_count: 3,
-      succeeded_count: 3,
-      failed_count: 0,
-      resumed_count: 0,
       attempts: 1,
       completed_at: null,
     });
-    expect(crashed!.processed_keys).toEqual(["A", "B", "C"]);
+    // Per-item progress is now in agent_batch_progress_item (migration 0031)
+    const crashedItems = runtime().state.agent_batch_progress_items.filter(r => r.batch_key === batchKey);
+    expect(crashedItems.map(r => r.item_key).sort()).toEqual(["A", "B", "C"]);
 
     // The abandoned run still owns the key. That is what lets a SIGTERM
     // handler interrupt it immediately instead of waiting out the heartbeat.
@@ -190,7 +189,7 @@ describe("crash mid-batch: resume from persisted state", () => {
       agentName: "test.resumable",
       items: ITEMS,
       itemKey: (item) => item,
-      checkpointEvery: 1,
+      
       actor: "operator-1",
       request_id: "req-crash-2",
       processItem: async (item, index) => {
@@ -220,9 +219,6 @@ describe("crash mid-batch: resume from persisted state", () => {
     expect(finished).toMatchObject({
       status: "COMPLETED",
       total_items: 5,
-      processed_count: 5,
-      succeeded_count: 5,
-      failed_count: 0,
       resumed_count: 3,
       attempts: 2,
       last_error: null,
@@ -253,7 +249,7 @@ describe("crash mid-batch: resume from persisted state", () => {
           agentName: "test.failed-carried",
           items: ITEMS,
           itemKey: (item) => item,
-          checkpointEvery: 1,
+          
           processItem: async (item, index) => {
             if (item === "B") throw new Error("malformed candidate row");
             return crashingItem(item, index);
@@ -264,13 +260,12 @@ describe("crash mid-batch: resume from persisted state", () => {
     ).rejects.toThrow("SIGKILL");
 
     expect(firstRun).toEqual(["A", "C"]);
-    expect(await loadBatchProgress(batchKey)).toMatchObject({
-      status: "RUNNING",
-      processed_count: 3,
-      succeeded_count: 2,
-      failed_count: 1,
-    });
-    expect((await loadBatchProgress(batchKey))!.failures).toEqual([{ key: "B", error: "malformed candidate row" }]);
+    expect((await loadBatchProgress(batchKey))!.status).toBe("RUNNING");
+    // Per-item progress is now in agent_batch_progress_item (migration 0031)
+    const midItems = runtime().state.agent_batch_progress_items.filter(r => r.batch_key === batchKey);
+    expect(midItems.map(r => r.item_key).sort()).toEqual(["A", "B", "C"]);
+    expect(midItems.find(r => r.item_key === "B")?.status).toBe("FAILED");
+    expect(midItems.find(r => r.item_key === "B")?.error).toBe("malformed candidate row");
 
     const secondRun: string[] = [];
     const out = await runResumableBatch<string>({
@@ -278,7 +273,7 @@ describe("crash mid-batch: resume from persisted state", () => {
       agentName: "test.failed-carried",
       items: ITEMS,
       itemKey: (item) => item,
-      checkpointEvery: 1,
+      
       processItem: async (item) => {
         secondRun.push(item);
         return `done:${item}`;
@@ -292,8 +287,12 @@ describe("crash mid-batch: resume from persisted state", () => {
     expect(out).toMatchObject({ ok: 2, failed: 1, resumed_skipped: 3, status: "COMPLETED" });
 
     const finished = await loadBatchProgress(batchKey);
-    expect(finished).toMatchObject({ processed_count: 5, succeeded_count: 4, failed_count: 1, status: "COMPLETED" });
-    expect(finished!.processed_keys.sort()).toEqual(["A", "B", "C", "D", "E"]);
+    expect(finished!.status).toBe("COMPLETED");
+    // Per-item progress is now in agent_batch_progress_item (migration 0031)
+    const finishedItems = runtime().state.agent_batch_progress_items.filter(r => r.batch_key === batchKey);
+    expect(finishedItems.map(r => r.item_key).sort()).toEqual(["A", "B", "C", "D", "E"]);
+    expect(finishedItems.filter(r => r.status === "PROCESSED").length).toBe(4);
+    expect(finishedItems.filter(r => r.status === "FAILED").length).toBe(1);
   });
 
   it("re-running a COMPLETED key starts clean by default, and is a no-op when asked", async () => {
@@ -348,7 +347,7 @@ describe("startup recovery of orphaned batches", () => {
           agentName: "test.orphan",
           items: ["A", "B"],
           itemKey: (item) => item,
-          checkpointEvery: 1,
+          
           processItem,
         }),
         crash,
@@ -360,7 +359,7 @@ describe("startup recovery of orphaned batches", () => {
     await startAbandonedBatch("RESTART:orphan-stale");
 
     // Heartbeat is current: a live owner must not be stolen from.
-    expect(await recoverInterruptedBatches(120_000)).toBe(0);
+    expect(await recoverInterruptedBatches()).toBe(0);
     expect((await loadBatchProgress("RESTART:orphan-stale"))!.status).toBe("RUNNING");
 
     // Five minutes pass for that owner, and a second batch starts right now.
@@ -368,10 +367,10 @@ describe("startup recovery of orphaned batches", () => {
     await startAbandonedBatch("RESTART:orphan-fresh");
 
     // Only the stale one is reclaimed; the fresh one is left running.
-    expect(await recoverInterruptedBatches(120_000)).toBe(1);
+    expect(await recoverInterruptedBatches()).toBe(1);
     const reclaimed = await loadBatchProgress("RESTART:orphan-stale");
     expect(reclaimed!.status).toBe("INTERRUPTED");
-    expect(reclaimed!.last_error).toMatch(/Reclaimed by supervisor: heartbeat older than 120000ms/);
+    expect(reclaimed!.last_error).toMatch(/Reclaimed by supervisor: lease expired/);
     expect((await loadBatchProgress("RESTART:orphan-fresh"))!.status).toBe("RUNNING");
     expect(logMessages("warn")).toContain("AGENT_BATCHES_RECLAIMED");
 
@@ -382,7 +381,7 @@ describe("startup recovery of orphaned batches", () => {
       agentName: "test.orphan",
       items: ["A", "B"],
       itemKey: (item) => item,
-      checkpointEvery: 1,
+      
       processItem: async (item) => {
         handled.push(item);
         return `done:${item}`;
@@ -553,7 +552,7 @@ describe("graceful shutdown", () => {
       agentName: "test.shutdown",
       items: ["A", "B"],
       itemKey: (item) => item,
-      checkpointEvery: 1,
+      
       processItem: async () => {
         signalItemStarted!();
         await gate;

@@ -45,6 +45,60 @@ All tenant-scoped tables carry composite indexes starting with `org_id`:
 - `communication_log`: `(org_id, candidate_id)`, `(org_id, sent_at DESC)`
 - `appeals`: `(org_id, status)`, `(org_id, candidate_id)`
 
+## Quest 03 — Batch Checkpoint Redesign
+
+### New Table: `agent_batch_progress_item`
+
+Per-item checkpoint records replacing the O(n²) JSONB array writes on `agent_batch_progress`.
+
+| Column | Type | Notes |
+|---|---|---|
+| `batch_key` | TEXT NOT NULL | FK to `agent_batch_progress(batch_key)` ON DELETE CASCADE |
+| `item_key` | TEXT NOT NULL | Candidate ID or other item identifier |
+| `status` | TEXT NOT NULL | CHECK: `PROCESSED` or `FAILED` |
+| `error` | TEXT | Failure reason (NULL for PROCESSED) |
+| `processed_at` | TIMESTAMPTZ NOT NULL | Defaults to `now()` |
+
+PK: `(batch_key, item_key)`
+
+Indexes: `idx_abpi_batch_status` on `(batch_key, status)`
+
+### New Columns on `agent_batch_progress`
+
+| Column | Type | Notes |
+|---|---|---|
+| `owner_id` | UUID | Worker that currently owns the lease |
+| `lease_expires_at` | TIMESTAMPTZ | When the current lease expires |
+| `fencing_token` | BIGINT NOT NULL DEFAULT 0 | Monotonic counter preventing split-brain writes |
+| `resumed_count` | INTEGER DEFAULT 0 | Number of times this batch has been resumed |
+| `attempts` | INTEGER DEFAULT 0 | Number of execution attempts |
+
+Indexes: `idx_agent_batch_progress_lease` on `(lease_expires_at)` WHERE `status = 'RUNNING'`
+
+### Dropped Columns on `agent_batch_progress`
+
+- `processed_keys` (JSONB) — replaced by `agent_batch_progress_item` rows with `status='PROCESSED'`
+- `failures` (JSONB) — replaced by `agent_batch_progress_item` rows with `status='FAILED'`
+
+### New Columns on `evaluation_jobs`
+
+| Column | Type | Notes |
+|---|---|---|
+| `gate_id` | UUID | FK to `gate_events(gate_id)` — links CONTINUE_FROM_GATE jobs to their gate |
+| `requested_by_name` | TEXT | Human-readable caller name for system-triggered jobs |
+
+Stage CHECK widened: `'ELIGIBILITY','SCORING','BOTH','CONTINUE_FROM_GATE'`
+
+Unique index updated: `uq_active_evaluation_job` now includes `COALESCE(gate_id, ...)` so multiple gates on the same circular aren't deduplicated.
+
+### New Column on `gate_events`
+
+| Column | Type | Notes |
+|---|---|---|
+| `resolved_by_name` | TEXT | Human-readable name of the resolver (from `users.full_name`) |
+
+Index: `idx_gate_events_org_status_created` on `(org_id, status, created_at DESC)`
+
 ## Migration History
 
 See `src/database/migrations/` for the full sequence. Key milestones:
@@ -53,3 +107,4 @@ See `src/database/migrations/` for the full sequence. Key milestones:
 - 0002: Added org_id to candidates
 - 0022: Added org_id to gate_events
 - 0030: Tenant isolation — added org_id to audit_log, evaluation_results, scoring_results, verification_results, communication_log, appeals
+- 0031: Batch checkpoint redesign — per-item progress table, lease/fencing columns, CONTINUE_FROM_GATE stage, resolved_by_name audit trail

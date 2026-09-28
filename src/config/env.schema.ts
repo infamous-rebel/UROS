@@ -112,8 +112,12 @@ const EnvSchema = z.object({
   // Resumable-batch checkpointing (crash recovery).
   /** Persist batch progress every N items. 1 = after every item (strongest resume guarantee, one extra write per item). */
   AGENT_CHECKPOINT_EVERY: z.coerce.number().int().positive().default(1),
-  /** A RUNNING batch whose heartbeat is older than this is presumed to belong to a dead process and is marked INTERRUPTED so it can be resumed. */
-  AGENT_BATCH_STALE_AFTER_MS: z.coerce.number().int().positive().default(120_000),
+  /** DEPRECATED: use AGENT_BATCH_LEASE_MS. Retained for backward compatibility. */
+  AGENT_BATCH_STALE_AFTER_MS: z.coerce.number().int().positive().default(120_000).describe('DEPRECATED: use AGENT_BATCH_LEASE_MS'),
+  /** Lease duration for batch ownership. A RUNNING batch whose lease_expires_at < now() is reclaimable. */
+  AGENT_BATCH_LEASE_MS: z.coerce.number().int().positive().default(60_000),
+  /** Heartbeat interval — must be < AGENT_BATCH_LEASE_MS to prevent false reclaim. */
+  AGENT_BATCH_HEARTBEAT_MS: z.coerce.number().int().positive().default(15_000),
   /** Restarts a supervised long-running loop is allowed before the supervisor gives up and exits non-zero (letting Docker/K8s restart the whole process). */
   AGENT_SUPERVISOR_MAX_RESTARTS: z.coerce.number().int().min(0).default(5),
   AGENT_SUPERVISOR_RESTART_BACKOFF_MS: z.coerce.number().int().min(0).default(1_000),

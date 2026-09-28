@@ -10,3 +10,5 @@ coverage/
 *.zip
 *.tar.gz
 uros-quest-*.zip
+evidence.html
+.qoder/

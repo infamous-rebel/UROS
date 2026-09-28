@@ -87,7 +87,61 @@ docker compose logs api | grep '"request_id":"<the-id>"'
 
 This ties together the HTTP access log line, any error the `error_handler` logged, and (if the request touched the audit trail) the corresponding `audit_log` rows for that action — giving a full request-to-decision trace without needing a separate distributed tracing system for this phase's scope.
 
-## 10. When none of the above resolves it
+## 10. Reclaiming stuck batches (INTERRUPTED)
+
+A batch in `status='INTERRUPTED'` is a **durable state** — it persists until a human or scheduled action resumes or fails it. It is NOT automatically retried.
+
+### Why batches become INTERRUPTED
+
+- Worker process crashed or was killed mid-batch (lease expired without heartbeat).
+- A new worker claimed the lease after the original lease expired (`lease_expires_at < now()`), incrementing the fencing token.
+- `max_attempts` was not exceeded, but the batch was interrupted before completion.
+
+### How to inspect
+
+```sql
+SELECT batch_key, status, owner_id, lease_expires_at, fencing_token,
+       attempts, resumed_count, created_at, updated_at
+FROM agent_batch_progress
+WHERE status = 'INTERRUPTED'
+ORDER BY updated_at DESC;
+```
+
+Check per-item progress:
+
+```sql
+SELECT status, COUNT(*) AS cnt
+FROM agent_batch_progress_item
+WHERE batch_key = '<batch_key>'
+GROUP BY status;
+```
+
+### How to resume
+
+**Option A**: Restart the batch with `rerunCompleted=true` or `rerunFailed=true` via the API. The batch runner will detect the INTERRUPTED state, claim a new lease (incrementing fencing_token), skip already-processed items (via `agent_batch_progress_item`), and continue from where it left off.
+
+**Option B**: If the batch should be abandoned, update the status manually:
+
+```sql
+UPDATE agent_batch_progress SET status = 'FAILED', updated_at = now()
+WHERE batch_key = '<batch_key>' AND status = 'INTERRUPTED';
+```
+
+### Fencing token safety
+
+The `fencing_token` prevents split-brain: if Worker A's lease expires and Worker B claims the batch with `fencing_token + 1`, any subsequent write from Worker A (using the old token) will be rejected. This is checked at the SQL level — the UPDATE WHERE clause includes `AND fencing_token = $expected`.
+
+### Scheduled reclamation
+
+A cron job or scheduled task can scan for INTERRUPTED batches older than a threshold and either resume or fail them:
+
+```sql
+SELECT batch_key FROM agent_batch_progress
+WHERE status = 'INTERRUPTED'
+  AND updated_at < now() - INTERVAL '1 hour';
+```
+
+## 11. When none of the above resolves it
 
 - Rollback (bad deploy): `docs/runbooks/deploy.md` §4.
 - Data corruption/loss: `docs/runbooks/backup_restore.md` §3.

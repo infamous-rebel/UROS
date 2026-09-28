@@ -62,7 +62,7 @@ export async function enqueueEvaluationJob(payload: EvaluationJobPayload): Promi
       org_id: payload.org_id,
       entity_type: "EVALUATION_JOB",
       entity_id: insertResult.job_id,
-      agent_or_user: payload.requested_by,
+      agent_or_user: payload.requested_by ?? payload.requested_by_name ?? "SYSTEM",
       action: "JOB_ENQUEUED",
       output_value: payload,
     });

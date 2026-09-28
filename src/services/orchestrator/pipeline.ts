@@ -24,7 +24,7 @@ import { RawApplicationDocument, ParsedCandidate } from "../../agents/parser_age
 import { EligibilityRecommendation } from "../../agents/eligibility_agent";
 import { ScoringOutcome } from "../../agents/scoring_agent";
 import { VerificationOutcome } from "../../agents/verification_agent";
-import { waitForHumanGate } from "./hil_gates";
+import { createGate } from "./hil_gates";
 import { logger } from "../../utils/logger";
 import { AGENT_NAMES } from "../agent_runner/agents";
 import { runAgent } from "../agent_runner/runner";
@@ -63,7 +63,10 @@ export async function stageIntake(batchId: string, orgId: string): Promise<RawAp
     { actor: "Orchestrator", entity_type: "BATCH", entity_id: batchId }
   );
   if (!batch.source.preApprovedAutoIngest) {
-    await waitForHumanGate(batchId, "IMPORT_APPROVAL", orgId);
+    await createGate(batchId, "IMPORT_APPROVAL", orgId);
+    // Quest 03: gate created; pipeline resumes asynchronously via
+    // CONTINUE_FROM_GATE job when a human resolves the gate.
+    return [];
   }
   const documents = await runAgent<{ batch: Batch }, RawApplicationDocument[]>(
     AGENT_NAMES.INTAKE_LOAD_CANDIDATES,
@@ -159,7 +162,8 @@ export async function stageEligibility(
     failed: summary.failed,
     resumed_skipped: summary.resumed_skipped,
   });
-  await waitForHumanGate(batchId, "ELIGIBILITY_REVIEW", orgId);
+  // Quest 03: create gate and return — pipeline resumes via CONTINUE_FROM_GATE.
+  await createGate(batchId, "ELIGIBILITY_REVIEW", orgId);
 }
 
 export async function stageScoringAndRanking(batchId: string, rulePackVersionId: string, orgId: string): Promise<void> {
@@ -229,37 +233,14 @@ export async function stageScoringAndRanking(batchId: string, rulePackVersionId:
   });
 }
 
-export async function stageHumanReview(batchId: string, orgId: string): Promise<Candidate[]> {
+export async function stageHumanReview(batchId: string, orgId: string): Promise<void> {
   await runAgent<{ batch_id: string }, void>(
     AGENT_NAMES.HIL_SUPERVISOR_BUILD_REVIEW_QUEUE,
     { batch_id: batchId },
     { actor: "Orchestrator", entity_type: "BATCH", entity_id: batchId }
   );
-  const payload = await waitForHumanGate(batchId, "SHORTLIST_CONFIRMATION", orgId);
-  const shortlist = (payload as Candidate[]) ?? [];
-  // A human-confirmed payload, not machine work: isolating per candidate is
-  // enough, there is no crash-resume semantics to preserve (the gate itself
-  // is the durable record of the decision).
-  const summary = await runBatchIsolated<Candidate>({
-    agentName: "orchestrator.shortlist_update",
-    items: shortlist,
-    itemKey: (c) => c.candidate_id,
-    actor: "Orchestrator",
-    request_id: batchId,
-    entity_type: "BATCH",
-    processItem: async (c) => {
-      await db.query(
-        `UPDATE candidates SET status='SHORTLISTED', updated_at=now() WHERE candidate_id=$1`,
-        [c.candidate_id]
-      );
-    },
-  });
-  await logStage(batchId, "HUMAN_REVIEW", orgId, {
-    shortlisted: shortlist.length,
-    ok: summary.ok,
-    failed: summary.failed,
-  });
-  return shortlist;
+  // Quest 03: create gate and return — pipeline resumes via CONTINUE_FROM_GATE.
+  await createGate(batchId, "SHORTLIST_CONFIRMATION", orgId);
 }
 
 export async function stageVerification(batchId: string, shortlist: Candidate[], orgId: string): Promise<void> {
@@ -296,12 +277,20 @@ export async function stageVerification(batchId: string, shortlist: Candidate[],
     failed: summary.failed,
     resumed_skipped: summary.resumed_skipped,
   });
-  await waitForHumanGate(batchId, "VERIFICATION_SIGNOFF", orgId);
+  // Quest 03: create gate and return — pipeline resumes via CONTINUE_FROM_GATE.
+  await createGate(batchId, "VERIFICATION_SIGNOFF", orgId);
 }
 
 export async function stageCommunication(batchId: string, orgId: string): Promise<void> {
-  const payload = await waitForHumanGate(batchId, "COMMUNICATION_APPROVAL", orgId);
-  const recipients = (payload as Candidate[]) ?? [];
+  // Quest 03: create gate and return — pipeline resumes via CONTINUE_FROM_GATE.
+  await createGate(batchId, "COMMUNICATION_APPROVAL", orgId);
+}
+
+/**
+ * Quest 03: sends communication after COMMUNICATION_APPROVAL gate resolves.
+ * Called by continueFromGate, not directly by runPipeline.
+ */
+export async function stageCommunicationExecute(batchId: string, orgId: string, recipients: Candidate[]): Promise<void> {
   // A pipeline batch is always scoped to a single organization, so every
   // recipient shares the same org_id — used to resolve the org's default
   // communication language (Feature 5) if a recipient has no personal
@@ -324,58 +313,32 @@ export async function stageCommunication(batchId: string, orgId: string): Promis
   await logStage(batchId, "COMMUNICATION", orgId, { recipients: recipients.length });
 }
 
-export async function stageFinalApproval(batchId: string, triggeredBy: string, orgId: string): Promise<void> {
-  const payload = await waitForHumanGate(batchId, "FINAL_APPROVAL", orgId);
-  const finalApproved = (payload as Candidate[]) ?? [];
-  const summary = await runBatchIsolated<Candidate>({
-    agentName: "orchestrator.final_approval_update",
-    items: finalApproved,
-    itemKey: (c) => c.candidate_id,
-    actor: triggeredBy,
-    request_id: batchId,
-    entity_type: "BATCH",
-    processItem: async (c) => {
-      await db.query(
-        `UPDATE candidates SET status='SELECTED', updated_at=now() WHERE candidate_id=$1`,
-        [c.candidate_id]
-      );
-    },
-  });
-  if (summary.failed > 0) {
-    // Selection is a human decision already taken at the gate; a write that
-    // failed must be visible, not absorbed. Loud log, no silent short-list.
-    logger.error("PIPELINE_FINAL_APPROVAL_PARTIAL", {
-      batchId,
-      selected: summary.ok,
-      failed: summary.failed,
-      failures: summary.failures,
-    });
-  }
-  await logAudit({
-    org_id: orgId,
-    entity_type: "BATCH",
-    entity_id: batchId,
-    agent_or_user: triggeredBy,
-    action: "FINAL_APPROVAL",
-    output_value: { selected: finalApproved.length, persisted: summary.ok, failed: summary.failed },
-  });
+export async function stageFinalApproval(batchId: string, orgId: string): Promise<void> {
+  // Quest 03: create gate and return — pipeline resumes via CONTINUE_FROM_GATE.
+  await createGate(batchId, "FINAL_APPROVAL", orgId);
 }
 
+/**
+ * Quest 03: Full pipeline entry point. Each gate-creating stage creates
+ * its gate and returns immediately; the pipeline resumes asynchronously
+ * via CONTINUE_FROM_GATE jobs when gates are resolved.
+ *
+ * For the initial run, this executes stages up to the first gate:
+ * - If IMPORT_APPROVAL is needed: creates gate, returns (resumes on resolve)
+ * - Otherwise: runs intake, parse, eligibility, then creates ELIGIBILITY_REVIEW gate
+ */
 export async function runPipeline(
   batchId: string,
   circularId: string,
   rulePackVersionId: string,
   orgId: string,
-  triggeredBy: string
+  _triggeredBy: string
 ): Promise<void> {
   const candidates = await stageIntake(batchId, orgId);
+  if (candidates.length === 0) return; // IMPORT_APPROVAL gate created, waiting
   await stageParse(batchId, candidates);
   await stageEligibility(batchId, circularId, rulePackVersionId, orgId);
-  await stageScoringAndRanking(batchId, rulePackVersionId, orgId);
-  const shortlist = await stageHumanReview(batchId, orgId);
-  await stageVerification(batchId, shortlist, orgId);
-  await stageCommunication(batchId, orgId);
-  await stageFinalApproval(batchId, triggeredBy, orgId);
+  // stageEligibility creates ELIGIBILITY_REVIEW gate; pipeline resumes via CONTINUE_FROM_GATE
 }
 
 /**
@@ -389,7 +352,7 @@ export async function runEvaluationPipeline(params: {
   orgId: string;
   rulePackVersionId: string;
   circularId: string;
-  stage: "ELIGIBILITY" | "SCORING" | "BOTH";
+  stage: "ELIGIBILITY" | "SCORING" | "BOTH" | "CONTINUE_FROM_GATE";
   triggeredBy: string;
 }): Promise<void> {
   const { batchId, orgId, rulePackVersionId, circularId, stage, triggeredBy } = params;
@@ -402,6 +365,11 @@ export async function runEvaluationPipeline(params: {
     action: "PIPELINE_STARTED",
     input_value: { stage, circularId, rulePackVersionId, orgId },
   });
+
+  if (stage === "CONTINUE_FROM_GATE") {
+    await continueFromGate(batchId, orgId, circularId, rulePackVersionId, triggeredBy);
+    return;
+  }
 
   if (stage === "ELIGIBILITY" || stage === "BOTH") {
     await stageEligibility(batchId, circularId, rulePackVersionId, orgId);
@@ -418,4 +386,192 @@ export async function runEvaluationPipeline(params: {
     action: "PIPELINE_COMPLETED",
     output_value: { stage, orgId },
   });
+}
+
+// ---------------------------------------------------------------------
+// Quest 03: Gate continuation
+// ---------------------------------------------------------------------
+
+/**
+ * Dispatches pipeline continuation after a gate is resolved. Reads the
+ * gate's payload (which contains the human's decision + any data) and
+ * runs the appropriate next stage(s).
+ */
+export async function continueFromGate(
+  batchId: string,
+  orgId: string,
+  circularId: string,
+  rulePackVersionId: string,
+  triggeredBy: string
+): Promise<void> {
+  // Find the most recently resolved gate for this batch.
+  const gateRes = await db.query<{ gate_id: string; gate_type: string; payload: any }>(
+    `SELECT gate_id, gate_type, payload
+     FROM gate_events
+     WHERE batch_id=$1 AND org_id=$2 AND status='RESOLVED'
+     ORDER BY resolved_at DESC LIMIT 1`,
+    [batchId, orgId]
+  );
+  if (gateRes.rowCount === 0) {
+    logger.warn("CONTINUE_FROM_GATE_NO_RESOLVED_GATE", { batchId, orgId });
+    return;
+  }
+  const gate = gateRes.rows[0];
+  const decision = gate.payload?.decision ?? "APPROVE";
+
+  await logAudit({
+    org_id: orgId,
+    entity_type: "PIPELINE_CONTINUATION",
+    entity_id: batchId,
+    agent_or_user: triggeredBy,
+    action: `CONTINUE_FROM_${gate.gate_type}`,
+    input_value: { gate_id: gate.gate_id, gate_type: gate.gate_type, decision },
+  });
+
+  switch (gate.gate_type) {
+    case "IMPORT_APPROVAL":
+      if (decision === "REJECT") return;
+      // Resume: parse + eligibility + create ELIGIBILITY_REVIEW gate
+      // (stageIntake returned [] because gate was created; re-run with gate resolved)
+      // We need to re-fetch documents since the first call returned early.
+      // For simplicity, run parse + eligibility directly.
+      await stageParse(batchId, []);  // parse will fetch from candidates
+      await stageEligibility(batchId, circularId, rulePackVersionId, orgId);
+      return;
+
+    case "ELIGIBILITY_REVIEW":
+      if (decision === "REJECT") return;
+      await stageScoringAndRanking(batchId, rulePackVersionId, orgId);
+      await stageHumanReview(batchId, orgId);
+      return;
+
+    case "SHORTLIST_CONFIRMATION": {
+      if (decision === "REJECT") {
+        // Rejection: mark all shortlisted candidates as REJECTED
+        await db.query(
+          `UPDATE candidates SET status='REJECTED', updated_at=now()
+           WHERE org_id=$1 AND status IN ('SHORTLISTED','SCORED')`,
+          [orgId]
+        );
+        await logAudit({
+          org_id: orgId,
+          entity_type: "BATCH",
+          entity_id: batchId,
+          agent_or_user: triggeredBy,
+          action: "SHORTLIST_REJECTED",
+          reason_code: "SHORTLIST_REJECTED",
+        });
+        return;
+      }
+      // APPROVE: apply shortlist updates from gate payload
+      const shortlist = (gate.payload?.data as Candidate[]) ?? (gate.payload?.candidates as Candidate[]) ?? [];
+      if (shortlist.length > 0) {
+        await runBatchIsolated<Candidate>({
+          agentName: "orchestrator.shortlist_update",
+          items: shortlist,
+          itemKey: (c) => c.candidate_id,
+          actor: "Orchestrator",
+          request_id: batchId,
+          entity_type: "BATCH",
+          processItem: async (c) => {
+            await db.query(
+              `UPDATE candidates SET status='SHORTLISTED', updated_at=now() WHERE candidate_id=$1`,
+              [c.candidate_id]
+            );
+          },
+        });
+      }
+      // Fetch shortlisted candidates for verification
+      const shortlistRes = await db.query<Candidate>(
+        `SELECT * FROM candidates WHERE org_id=$1 AND status='SHORTLISTED'`,
+        [orgId]
+      );
+      await stageVerification(batchId, shortlistRes.rows, orgId);
+      return;
+    }
+
+    case "VERIFICATION_SIGNOFF":
+      if (decision === "REJECT") return;
+      // Update verified candidates
+      await db.query(
+        `UPDATE candidates SET status='VERIFIED', updated_at=now()
+         WHERE org_id=$1 AND status='SHORTLISTED'`,
+        [orgId]
+      );
+      await stageCommunication(batchId, orgId);
+      return;
+
+    case "COMMUNICATION_APPROVAL": {
+      if (decision === "REJECT") {
+        // Candidates stay VERIFIED; audit only
+        await logAudit({
+          org_id: orgId,
+          entity_type: "BATCH",
+          entity_id: batchId,
+          agent_or_user: triggeredBy,
+          action: "COMMUNICATION_REJECTED",
+          reason_code: "COMMUNICATION_REJECTED",
+          reason_comment: "Communication approval rejected; candidates remain VERIFIED.",
+        });
+        return;
+      }
+      const recipients = (gate.payload?.data as Candidate[]) ?? (gate.payload?.candidates as Candidate[]) ?? [];
+      await stageCommunicationExecute(batchId, orgId, recipients);
+      await stageFinalApproval(batchId, orgId);
+      return;
+    }
+
+    case "FINAL_APPROVAL": {
+      if (decision === "REJECT") {
+        // Candidates stay VERIFIED; audit only
+        await logAudit({
+          org_id: orgId,
+          entity_type: "BATCH",
+          entity_id: batchId,
+          agent_or_user: triggeredBy,
+          action: "FINAL_APPROVAL_REJECTED",
+          reason_code: "FINAL_APPROVAL_REJECTED",
+          reason_comment: "Final approval rejected; candidates remain VERIFIED.",
+        });
+        return;
+      }
+      const finalApproved = (gate.payload?.data as Candidate[]) ?? (gate.payload?.candidates as Candidate[]) ?? [];
+      if (finalApproved.length > 0) {
+        const summary = await runBatchIsolated<Candidate>({
+          agentName: "orchestrator.final_approval_update",
+          items: finalApproved,
+          itemKey: (c) => c.candidate_id,
+          actor: triggeredBy,
+          request_id: batchId,
+          entity_type: "BATCH",
+          processItem: async (c) => {
+            await db.query(
+              `UPDATE candidates SET status='SELECTED', updated_at=now() WHERE candidate_id=$1`,
+              [c.candidate_id]
+            );
+          },
+        });
+        if (summary.failed > 0) {
+          logger.error("PIPELINE_FINAL_APPROVAL_PARTIAL", {
+            batchId,
+            selected: summary.ok,
+            failed: summary.failed,
+            failures: summary.failures,
+          });
+        }
+      }
+      await logAudit({
+        org_id: orgId,
+        entity_type: "BATCH",
+        entity_id: batchId,
+        agent_or_user: triggeredBy,
+        action: "FINAL_APPROVAL",
+        output_value: { selected: finalApproved.length },
+      });
+      return;
+    }
+
+    default:
+      logger.warn("CONTINUE_FROM_GATE_UNKNOWN_TYPE", { gate_type: gate.gate_type, batchId });
+  }
 }

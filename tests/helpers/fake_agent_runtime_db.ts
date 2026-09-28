@@ -1,21 +1,16 @@
 /**
- * In-memory fake for the `agent_batch_progress` table (migration 0028) and
- * `audit_log`, scoped to exactly the statements
+ * In-memory fake for the `agent_batch_progress` + `agent_batch_progress_item`
+ * tables (migration 0031) and `audit_log`, scoped to exactly the statements
  * `src/services/agent_runner/batch.ts` issues.
  *
- * Two things make this more than a stub:
+ * Key features:
+ *  1. Per-item checkpoint table (agent_batch_progress_item) with PK enforcement.
+ *  2. Lease/fencing concurrency protection: persistCheckpoint and finishBatch
+ *     carry fencing tokens; mismatch returns rowCount=0.
+ *  3. Controllable clock + `ageLease` to simulate lease expiry.
+ *  4. `setTableAvailable(false)` simulates migration not applied.
  *
- *  1. It enforces the migration's CHECK constraints. A checkpoint writer
- *     that leaves `succeeded + failed > processed`, or marks a batch
- *     COMPLETED with items outstanding, fails here exactly as it would in
- *     Postgres — so the resume tests cannot pass on inconsistent state.
- *  2. It has a controllable clock and a kill switch. `ageHeartbeat` lets a
- *     test reproduce "the owning process died 5 minutes ago", and
- *     `setTableAvailable(false)` reproduces "migration 0028 has not been
- *     applied yet", which the batch layer is designed to survive.
- *
- * Dispatch is on a normalized SQL prefix, matching the other fakes in this
- * directory: honest for a fixed, known query set, not a query engine.
+ * Dispatch is on a normalized SQL prefix, matching the other fakes.
  */
 export type FakeBatchStatus = "RUNNING" | "INTERRUPTED" | "COMPLETED" | "FAILED";
 
@@ -25,13 +20,11 @@ export interface FakeBatchRow {
   org_id: string | null;
   status: FakeBatchStatus;
   total_items: number;
-  processed_count: number;
-  succeeded_count: number;
-  failed_count: number;
   resumed_count: number;
   attempts: number;
-  processed_keys: string[];
-  failures: Array<{ key: string; error: string }>;
+  owner_id: string | null;
+  lease_expires_at: string | null;
+  fencing_token: number;
   last_error: string | null;
   actor: string | null;
   request_id: string | null;
@@ -41,8 +34,17 @@ export interface FakeBatchRow {
   updated_at: string;
 }
 
+export interface FakeBatchItemRow {
+  batch_key: string;
+  item_key: string;
+  status: "PROCESSED" | "FAILED";
+  error: string | null;
+  processed_at: string;
+}
+
 export interface FakeAgentRuntimeDbState {
   agent_batch_progress: FakeBatchRow[];
+  agent_batch_progress_items: FakeBatchItemRow[];
   audit_log: Array<{ id: number; params: any[] }>;
 }
 
@@ -56,9 +58,9 @@ export interface FakeAgentRuntimeDb {
   nowMs: () => number;
   /** Moves the fake clock forward. */
   advance: (ms: number) => void;
-  /** Back-dates one row's heartbeat, simulating a process that died `ms` ago. */
-  ageHeartbeat: (batchKey: string, ms: number) => void;
-  /** Simulates migration 0028 not being applied: every statement on the table fails. */
+  /** Back-dates one row's lease_expires_at, simulating a process whose lease expired `ms` ago. */
+  ageLease: (batchKey: string, ms: number) => void;
+  /** Simulates migration 0031 not being applied: every statement on the table fails. */
   setTableAvailable: (available: boolean) => void;
   rowFor: (batchKey: string) => FakeBatchRow | undefined;
 }
@@ -66,7 +68,7 @@ export interface FakeAgentRuntimeDb {
 const TABLE_UNAVAILABLE = 'relation "agent_batch_progress" does not exist';
 
 export function createFakeAgentRuntimeDb(startMs: number = 1_760_000_000_000): FakeAgentRuntimeDb {
-  const state: FakeAgentRuntimeDbState = { agent_batch_progress: [], audit_log: [] };
+  const state: FakeAgentRuntimeDbState = { agent_batch_progress: [], agent_batch_progress_items: [], audit_log: [] };
 
   let clock = startMs;
   let auditSeq = 1;
@@ -74,42 +76,17 @@ export function createFakeAgentRuntimeDb(startMs: number = 1_760_000_000_000): F
 
   const nowIso = (): string => new Date(clock).toISOString();
 
-  function assertConstraints(row: FakeBatchRow): void {
-    if (row.succeeded_count + row.failed_count > row.processed_count) {
-      throw new Error(
-        `CHECK agent_batch_progress_counts_consistent: succeeded(${row.succeeded_count}) + failed(${row.failed_count}) > processed(${row.processed_count})`
-      );
-    }
-    if (row.processed_count > row.total_items) {
-      throw new Error(`CHECK agent_batch_progress_counts_consistent: processed(${row.processed_count}) > total(${row.total_items})`);
-    }
-    if (row.status === "COMPLETED" && row.processed_count !== row.total_items) {
-      throw new Error(
-        `CHECK agent_batch_progress_completed_is_full: status COMPLETED with processed(${row.processed_count}) != total(${row.total_items})`
-      );
-    }
-    if (new Date(row.heartbeat_at).getTime() < new Date(row.started_at).getTime()) {
-      throw new Error("CHECK agent_batch_progress_heartbeat_after_start: heartbeat precedes start");
-    }
-  }
-
   function requireTable(): void {
     if (!tableAvailable) throw new Error(TABLE_UNAVAILABLE);
   }
 
-  function parseJsonArray<T>(value: unknown, fallback: T[]): T[] {
-    if (Array.isArray(value)) return value as T[];
-    if (typeof value !== "string") return fallback;
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? (parsed as T[]) : fallback;
-    } catch {
-      return fallback;
-    }
+  function clone(row: FakeBatchRow): FakeBatchRow {
+    return { ...row };
   }
 
-  function clone(row: FakeBatchRow): FakeBatchRow {
-    return { ...row, processed_keys: [...row.processed_keys], failures: row.failures.map((f) => ({ ...f })) };
+  function parseIntervalMs(value: string): number {
+    // Parse "60000" from params — the SQL uses ($N || ' milliseconds')::interval
+    return Number(value);
   }
 
   async function query(text: string, params: any[] = []): Promise<{ rows: any[]; rowCount: number }> {
@@ -118,6 +95,62 @@ export function createFakeAgentRuntimeDb(startMs: number = 1_760_000_000_000): F
     if (sql.startsWith("INSERT INTO audit_log")) {
       state.audit_log.push({ id: auditSeq++, params });
       return { rows: [], rowCount: 1 };
+    }
+
+    // --- agent_batch_progress_item queries ---
+
+    // writeItemCheckpoint: INSERT INTO agent_batch_progress_item ... ON CONFLICT DO UPDATE
+    if (sql.startsWith("INSERT INTO agent_batch_progress_item")) {
+      requireTable();
+      const [batchKey, itemKey, status, error] = params;
+      const existing = state.agent_batch_progress_items.find(
+        (r) => r.batch_key === batchKey && r.item_key === itemKey
+      );
+      if (existing) {
+        existing.status = status;
+        existing.error = error ?? null;
+        existing.processed_at = nowIso();
+      } else {
+        state.agent_batch_progress_items.push({
+          batch_key: batchKey,
+          item_key: itemKey,
+          status: status,
+          error: error ?? null,
+          processed_at: nowIso(),
+        });
+      }
+      return { rows: [], rowCount: 1 };
+    }
+
+    // Read already-processed items: SELECT item_key, status[, error] FROM agent_batch_progress_item WHERE batch_key = $1
+    // Normalized SQL may have "batch_key=$1" or "batch_key = $1" — match either.
+    if (sql.startsWith("SELECT item_key, status") && sql.includes("FROM agent_batch_progress_item") && sql.includes("WHERE batch_key")) {
+      requireTable();
+      const items = state.agent_batch_progress_items
+        .filter((r) => r.batch_key === params[0])
+        .map((r) => ({ item_key: r.item_key, status: r.status, error: r.error }));
+      return { rows: items, rowCount: items.length };
+    }
+
+    // Delete per-item progress (when re-running a COMPLETED batch)
+    if (sql.startsWith("DELETE FROM agent_batch_progress_item")) {
+      requireTable();
+      const batchKey = params[0];
+      const before = state.agent_batch_progress_items.length;
+      state.agent_batch_progress_items = state.agent_batch_progress_items.filter(r => r.batch_key !== batchKey);
+      return { rows: [], rowCount: before - state.agent_batch_progress_items.length };
+    }
+
+    // Read batch counts: SELECT COUNT(*) ... FROM agent_batch_progress_item WHERE batch_key=$1
+    if (sql.includes("COUNT(*)") && sql.includes("agent_batch_progress_item")) {
+      requireTable();
+      const items = state.agent_batch_progress_items.filter((r) => r.batch_key === params[0]);
+      const processed = items.filter((r) => r.status === "PROCESSED").length;
+      const failed = items.filter((r) => r.status === "FAILED").length;
+      return {
+        rows: [{ processed_count: String(processed + failed), succeeded_count: String(processed), failed_count: String(failed) }],
+        rowCount: 1,
+      };
     }
 
     if (!sql.includes("agent_batch_progress")) {
@@ -133,122 +166,133 @@ export function createFakeAgentRuntimeDb(startMs: number = 1_760_000_000_000): F
 
     // --- beginBatch: INSERT ... ON CONFLICT (batch_key) DO UPDATE ... RETURNING * ---
     if (sql.startsWith("INSERT INTO agent_batch_progress")) {
-      const [batchKey, agentName, orgId, totalItems, processedCount, succeededCount, failedCount, resumedCount, processedKeysJson, failuresJson, actor, requestId] = params;
+      const [batchKey, agentName, orgId, totalItems, ownerId, leaseMs, actor, requestId] = params;
       const existing = state.agent_batch_progress.find((r) => r.batch_key === batchKey);
-      const row: FakeBatchRow = existing
-        ? {
-            ...existing,
-            agent_name: agentName,
-            org_id: orgId ?? existing.org_id,
-            status: "RUNNING",
-            total_items: Number(totalItems),
-            processed_count: Number(processedCount),
-            succeeded_count: Number(succeededCount),
-            failed_count: Number(failedCount),
-            resumed_count: Number(resumedCount),
-            attempts: existing.attempts + 1,
-            processed_keys: parseJsonArray<string>(processedKeysJson, []),
-            failures: parseJsonArray(failuresJson, []),
-            last_error: null,
-            actor,
-            request_id: requestId ?? null,
-            heartbeat_at: nowIso(),
-            completed_at: null,
-            updated_at: nowIso(),
-          }
-        : {
-            batch_key: batchKey,
-            agent_name: agentName,
-            org_id: orgId ?? null,
-            status: "RUNNING",
-            total_items: Number(totalItems),
-            processed_count: Number(processedCount),
-            succeeded_count: Number(succeededCount),
-            failed_count: Number(failedCount),
-            resumed_count: Number(resumedCount),
-            attempts: 1,
-            processed_keys: parseJsonArray<string>(processedKeysJson, []),
-            failures: parseJsonArray(failuresJson, []),
-            last_error: null,
-            actor,
-            request_id: requestId ?? null,
-            started_at: nowIso(),
-            heartbeat_at: nowIso(),
-            completed_at: null,
-            updated_at: nowIso(),
-          };
-      assertConstraints(row);
-      if (existing) Object.assign(existing, row);
-      else state.agent_batch_progress.push(row);
-      return { rows: [clone(row)], rowCount: 1 };
+      const leaseExpiry = new Date(clock + parseIntervalMs(leaseMs)).toISOString();
+
+      if (existing) {
+        existing.agent_name = agentName;
+        existing.org_id = orgId ?? existing.org_id;
+        existing.status = "RUNNING";
+        existing.total_items = Number(totalItems);
+        existing.owner_id = ownerId;
+        existing.lease_expires_at = leaseExpiry;
+        existing.fencing_token = existing.fencing_token + 1;
+        existing.attempts = existing.attempts + 1;
+        existing.actor = actor;
+        existing.request_id = requestId ?? null;
+        existing.last_error = null;
+        existing.completed_at = null;
+        existing.heartbeat_at = nowIso();
+        existing.updated_at = nowIso();
+        return { rows: [clone(existing)], rowCount: 1 };
+      } else {
+        const row: FakeBatchRow = {
+          batch_key: batchKey,
+          agent_name: agentName,
+          org_id: orgId ?? null,
+          status: "RUNNING",
+          total_items: Number(totalItems),
+          resumed_count: 0,
+          attempts: 1,
+          owner_id: ownerId,
+          lease_expires_at: leaseExpiry,
+          fencing_token: 1,
+          last_error: null,
+          actor,
+          request_id: requestId ?? null,
+          started_at: nowIso(),
+          heartbeat_at: nowIso(),
+          completed_at: null,
+          updated_at: nowIso(),
+        };
+        state.agent_batch_progress.push(row);
+        return { rows: [clone(row)], rowCount: 1 };
+      }
     }
 
-    // --- persistCheckpoint ---
-    if (sql.startsWith("UPDATE agent_batch_progress SET processed_keys=$2::jsonb")) {
-      const [batchKey, processedKeysJson, failuresJson, processedCount, succeededCount, failedCount, resumedCount, lastError] = params;
-      const row = state.agent_batch_progress.find((r) => r.batch_key === batchKey);
+    // --- startHeartbeat: UPDATE ... SET lease_expires_at = now() + interval, heartbeat_at = now() WHERE batch_key=$1 AND status='RUNNING' ---
+    if (sql.includes("SET lease_expires_at = now()") && sql.includes("heartbeat_at = now()") && !sql.includes("fencing_token")) {
+      const [batchKey, leaseMs] = params;
+      const row = state.agent_batch_progress.find((r) => r.batch_key === batchKey && r.status === "RUNNING");
       if (!row) return { rows: [], rowCount: 0 };
-      row.processed_keys = parseJsonArray<string>(processedKeysJson, []);
-      row.failures = parseJsonArray(failuresJson, []);
-      row.processed_count = Number(processedCount);
-      row.succeeded_count = Number(succeededCount);
-      row.failed_count = Number(failedCount);
-      row.resumed_count = Number(resumedCount);
-      row.last_error = lastError ?? null;
+      row.lease_expires_at = new Date(clock + parseIntervalMs(leaseMs)).toISOString();
       row.heartbeat_at = nowIso();
-      row.updated_at = nowIso();
-      assertConstraints(row);
       return { rows: [], rowCount: 1 };
     }
 
-    // --- finishBatch ---
-    if (sql.startsWith("UPDATE agent_batch_progress SET status=$2,")) {
-      const [batchKey, status, processedKeysJson, failuresJson, processedCount, succeededCount, failedCount, resumedCount, totalItems, lastError] = params;
+    // --- persistCheckpoint: heartbeat + fencing (no JSONB) ---
+    if (sql.includes("fencing_token = fencing_token + 1") && sql.includes("heartbeat_at = now()")) {
+      const [batchKey, leaseMs, fencingToken] = params;
       const row = state.agent_batch_progress.find((r) => r.batch_key === batchKey);
       if (!row) return { rows: [], rowCount: 0 };
+      // Fencing check: if the token doesn't match, return rowCount=0
+      if (row.fencing_token !== Number(fencingToken)) {
+        return { rows: [], rowCount: 0 };
+      }
+      row.heartbeat_at = nowIso();
+      row.lease_expires_at = new Date(clock + parseIntervalMs(leaseMs)).toISOString();
+      row.fencing_token = row.fencing_token + 1;
+      row.updated_at = nowIso();
+      return { rows: [], rowCount: 1 };
+    }
+
+    // --- finishBatch: with fencing ---
+    if (sql.startsWith("UPDATE agent_batch_progress") && sql.includes("SET status = $2") && sql.includes("fencing_token = $3")) {
+      const [batchKey, status, fencingToken] = params;
+      const row = state.agent_batch_progress.find((r) => r.batch_key === batchKey);
+      if (!row) return { rows: [], rowCount: 0 };
+      // Fencing check
+      if (row.fencing_token !== Number(fencingToken)) {
+        return { rows: [], rowCount: 0 };
+      }
       row.status = status as FakeBatchStatus;
-      row.processed_keys = parseJsonArray<string>(processedKeysJson, []);
-      row.failures = parseJsonArray(failuresJson, []);
-      row.processed_count = Number(processedCount);
-      row.succeeded_count = Number(succeededCount);
-      row.failed_count = Number(failedCount);
-      row.resumed_count = Number(resumedCount);
-      row.total_items = Number(totalItems);
-      row.last_error = lastError ?? null;
       if (status === "COMPLETED" || status === "FAILED") row.completed_at = nowIso();
       row.heartbeat_at = nowIso();
+      row.lease_expires_at = null;
       row.updated_at = nowIso();
-      assertConstraints(row);
       return { rows: [], rowCount: 1 };
     }
 
-    // --- markBatchInterrupted ---
-    if (sql.startsWith("UPDATE agent_batch_progress SET status='INTERRUPTED', last_error=$2, heartbeat_at=now()")) {
+    // --- markBatchInterrupted: SET status='INTERRUPTED', lease_expires_at=NULL ---
+    if (sql.startsWith("UPDATE agent_batch_progress") && sql.includes("SET status='INTERRUPTED'") && sql.includes("lease_expires_at=NULL")) {
       const [batchKey, reason] = params;
       const row = state.agent_batch_progress.find((r) => r.batch_key === batchKey && r.status === "RUNNING");
       if (!row) return { rows: [], rowCount: 0 };
       row.status = "INTERRUPTED";
+      row.lease_expires_at = null;
       row.last_error = reason;
-      row.heartbeat_at = nowIso();
       row.updated_at = nowIso();
-      assertConstraints(row);
       return { rows: [], rowCount: 1 };
     }
 
-    // --- recoverInterruptedBatches: reclaim RUNNING rows with a stale heartbeat ---
-    if (sql.startsWith("UPDATE agent_batch_progress SET status='INTERRUPTED', last_error=COALESCE(")) {
-      const staleAfterMs = Number(params[0]);
-      const cutoff = clock - staleAfterMs;
+    // --- update resumed_count: SET resumed_count = $2 ---
+    if (sql.startsWith("UPDATE agent_batch_progress") && sql.includes("SET resumed_count")) {
+      const [batchKey, resumedCount] = params;
+      const row = state.agent_batch_progress.find((r) => r.batch_key === batchKey);
+      if (!row) return { rows: [], rowCount: 0 };
+      row.resumed_count = Number(resumedCount);
+      row.updated_at = nowIso();
+      return { rows: [], rowCount: 1 };
+    }
+
+    // --- recoverInterruptedBatches: reclaim RUNNING rows with expired lease ---
+    if (sql.startsWith("UPDATE agent_batch_progress") && sql.includes("lease_expires_at < now()")) {
       const reclaimed = state.agent_batch_progress.filter(
-        (r) => r.status === "RUNNING" && new Date(r.heartbeat_at).getTime() < cutoff
+        (r) => r.status === "RUNNING" && r.lease_expires_at !== null && new Date(r.lease_expires_at).getTime() < clock
       );
       for (const row of reclaimed) {
         row.status = "INTERRUPTED";
-        row.last_error = row.last_error ?? `Reclaimed by supervisor: heartbeat older than ${staleAfterMs}ms`;
+        row.owner_id = null;
+        row.lease_expires_at = null;
+        row.fencing_token = row.fencing_token + 1;
+        row.last_error = row.last_error ?? "Reclaimed by supervisor: lease expired";
         row.updated_at = nowIso();
-        assertConstraints(row);
       }
-      return { rows: reclaimed.map((r) => ({ batch_key: r.batch_key, agent_name: r.agent_name })), rowCount: reclaimed.length };
+      return {
+        rows: reclaimed.map((r) => ({ batch_key: r.batch_key, agent_name: r.agent_name, fencing_token: r.fencing_token })),
+        rowCount: reclaimed.length,
+      };
     }
 
     throw new Error(`Fake agent runtime DB: unhandled query: ${sql}`);
@@ -263,10 +307,10 @@ export function createFakeAgentRuntimeDb(startMs: number = 1_760_000_000_000): F
     advance: (ms: number) => {
       clock += ms;
     },
-    ageHeartbeat: (batchKey: string, ms: number) => {
+    ageLease: (batchKey: string, ms: number) => {
       const row = state.agent_batch_progress.find((r) => r.batch_key === batchKey);
       if (!row) throw new Error(`Fake agent runtime DB: no batch row for key '${batchKey}'`);
-      row.heartbeat_at = new Date(new Date(row.heartbeat_at).getTime() - ms).toISOString();
+      row.lease_expires_at = new Date(new Date(row.lease_expires_at ?? row.heartbeat_at).getTime() - ms).toISOString();
     },
     setTableAvailable: (available: boolean) => {
       tableAvailable = available;

@@ -2,6 +2,7 @@ import { db } from "../../database/client";
 import { logAudit } from "../../utils/audit_helper";
 import { env } from "../../config/env.schema";
 import { gateListener } from "./gate_listener";
+import { logger } from "../../utils/logger";
 
 /**
  * Creates a PENDING gate_event and blocks (via polling in this reference
@@ -17,11 +18,16 @@ import { gateListener } from "./gate_listener";
  * (see migration 0022_gate_org_id.sql) so resolveGate can enforce that a
  * gate is only ever resolved by a human from the same org that created it.
  */
-export async function createGate(batchId: string, gateType: string, orgId: string): Promise<string> {
+export async function createGate(
+  batchId: string,
+  gateType: string,
+  orgId: string,
+  payload?: unknown
+): Promise<string> {
   const res = await db.query<{ gate_id: string }>(
-    `INSERT INTO gate_events (batch_id, gate_type, org_id, status)
-     VALUES ($1, $2, $3, 'PENDING') RETURNING gate_id`,
-    [batchId, gateType, orgId]
+    `INSERT INTO gate_events (batch_id, gate_type, org_id, status, payload)
+     VALUES ($1, $2, $3, 'PENDING', $4) RETURNING gate_id`,
+    [batchId, gateType, orgId, payload ? JSON.stringify(payload) : null]
   );
   await logAudit({
     entity_type: "GATE",
@@ -75,20 +81,28 @@ export async function resolveGate(
     throw new Error(`Gate already resolved: ${gateId}`);
   }
 
+  // Resolve the human's name for the audit trail (Quest 03).
+  const nameRes = await db.query<{ full_name: string }>(
+    `SELECT full_name FROM users WHERE user_id=$1`,
+    [resolvedBy]
+  );
+  const resolvedByName = nameRes.rows[0]?.full_name ?? resolvedBy;
+
   const fullPayload = { decision, ...(typeof payload === "object" && payload !== null ? payload : { value: payload }) };
 
   const updated = await db.query<{ resolved_at: string }>(
     `UPDATE gate_events
-     SET status='RESOLVED', resolved_by=$1, payload=$2, resolved_at=now()
+     SET status='RESOLVED', resolved_by=$1, payload=$2, resolved_at=now(), resolved_by_name=$4
      WHERE gate_id=$3
      RETURNING resolved_at`,
-    [resolvedBy, JSON.stringify(fullPayload), gateId]
+    [resolvedBy, JSON.stringify(fullPayload), gateId, resolvedByName]
   );
 
   // Production hook: notify any LISTEN-ing worker that this gate resolved.
   await db.query(`SELECT pg_notify('gate_resolved', $1)`, [gateId]);
 
   await logAudit({
+    org_id: orgId,
     entity_type: "GATE",
     entity_id: gateId,
     agent_or_user: resolvedBy,
@@ -96,6 +110,10 @@ export async function resolveGate(
     reason_code: decision,
     output_value: fullPayload,
   });
+
+  // Quest 03: enqueue a CONTINUE_FROM_GATE job so the pipeline resumes
+  // asynchronously instead of blocking the resolving request.
+  await enqueueContinuationJob(gateId, orgId, resolvedByName);
 
   return {
     gate_id: gateId,
@@ -123,4 +141,78 @@ export async function waitForHumanGate(
 ): Promise<unknown> {
   const gateId = await createGate(batchId, gateType, orgId);
   return gateListener.waitFor(gateId, timeoutMs);
+}
+
+/**
+ * Lists all PENDING gates for an org, newest first.
+ * Used by the gate inbox UI (Quest 03).
+ */
+export async function listPendingGates(orgId: string): Promise<Array<{
+  gate_id: string;
+  batch_id: string;
+  gate_type: string;
+  org_id: string;
+  payload: unknown;
+  created_at: string;
+}>> {
+  const res = await db.query(
+    `SELECT gate_id, batch_id, gate_type, org_id, payload, created_at
+     FROM gate_events
+     WHERE org_id=$1 AND status='PENDING'
+     ORDER BY created_at DESC`,
+    [orgId]
+  );
+  return res.rows.map((r) => ({
+    gate_id: r.gate_id,
+    batch_id: r.batch_id,
+    gate_type: r.gate_type,
+    org_id: r.org_id,
+    payload: typeof r.payload === "string" ? JSON.parse(r.payload) : r.payload,
+    created_at: r.created_at,
+  }));
+}
+
+/**
+ * After a gate is resolved, enqueues a CONTINUE_FROM_GATE evaluation job
+ * so the pipeline resumes asynchronously. Looks up the batch context
+ * (circular_id, rule_pack_version_id) from the candidates table.
+ */
+async function enqueueContinuationJob(gateId: string, orgId: string, resolvedByName: string): Promise<void> {
+  // Look up the gate's batch context.
+  const gateRes = await db.query<{ batch_id: string; gate_type: string }>(
+    `SELECT batch_id, gate_type FROM gate_events WHERE gate_id=$1`,
+    [gateId]
+  );
+  if (gateRes.rowCount === 0) return;
+  const { batch_id, gate_type } = gateRes.rows[0];
+
+  // Derive circular_id and rule_pack_version_id from the batch's candidates
+  // and evaluation_results, respectively. Falls back to empty/zero UUIDs.
+  const ctxRes = await db.query<{ job_circular_id: string; rule_pack_version_id: string }>(
+    `SELECT
+       (SELECT DISTINCT job_circular_id FROM candidates WHERE org_id=$1 LIMIT 1) AS job_circular_id,
+       (SELECT DISTINCT rule_pack_version_id FROM evaluation_results
+        JOIN candidates c ON c.candidate_id = evaluation_results.candidate_id
+        WHERE c.org_id=$1 LIMIT 1) AS rule_pack_version_id`,
+    [orgId]
+  );
+  const circularId = ctxRes.rows[0]?.job_circular_id ?? "";
+  const rulePackVersionId = ctxRes.rows[0]?.rule_pack_version_id ?? "00000000-0000-0000-0000-000000000000";
+
+  try {
+    await db.query(
+      `INSERT INTO evaluation_jobs
+        (batch_id, circular_id, rule_pack_version_id, org_id, stage, gate_id, requested_by_name, status)
+       VALUES ($1, $2, $3, $4, 'CONTINUE_FROM_GATE', $5, $6, 'QUEUED')`,
+      [batch_id, circularId, rulePackVersionId, orgId, gateId, resolvedByName]
+    );
+    logger.info("CONTINUE_FROM_GATE_ENQUEUED", { gateId, batch_id, gate_type });
+  } catch (err: any) {
+    // Dedup: if a CONTINUE_FROM_GATE job already exists for this gate, skip.
+    if (err?.code === "23505") {
+      logger.info("CONTINUE_FROM_GATE_DEDUP", { gateId });
+      return;
+    }
+    throw err;
+  }
 }

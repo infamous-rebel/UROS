@@ -10,17 +10,20 @@
  *                       batch or lose the other 49,999 results.
  *
  *  `runResumableBatch`  the same, plus durable progress in
- *                       `agent_batch_progress` (migration 0028). If the
- *                       process is killed mid-run, a later run with the same
- *                       `batchKey` skips the items already handled and
- *                       finishes the remainder — no duplicated side effects,
- *                       no restart-from-zero.
+ *                       `agent_batch_progress` + `agent_batch_progress_item`
+ *                       (migration 0031). If the process is killed mid-run,
+ *                       a later run with the same `batchKey` skips the items
+ *                       already handled and finishes the remainder — no
+ *                       duplicated side effects, no restart-from-zero.
  *
- * Checkpoint writes are best-effort by design: if `agent_batch_progress` is
- * unavailable (not yet migrated, DB failover in progress) the batch still
- * runs and still isolates per-item errors — it just loses the ability to
- * resume. That trade is logged loudly as
- * AGENT_BATCH_CHECKPOINT_UNAVAILABLE rather than swallowed.
+ * Quest 03 redesign: replaced O(n²) JSONB processed_keys/failures array
+ * rewrites with per-item INSERTs into agent_batch_progress_item. Added
+ * lease-based concurrency protection (lease_expires_at + heartbeat) and
+ * fencing tokens to prevent split-brain batch writes after lease expiry.
+ *
+ * Checkpoint writes are best-effort by design: if the progress tables are
+ * unavailable the batch still runs and still isolates per-item errors — it
+ * just loses the ability to resume.
  */
 import { db } from "../../database/client";
 import { env } from "../../config/env.schema";
@@ -29,6 +32,7 @@ import { logAudit } from "../../utils/audit_helper";
 import { metrics } from "../../utils/metrics";
 import { getPoolForClass } from "./pools";
 import { AgentClass } from "./types";
+import crypto from "crypto";
 
 export type BatchStatus = "RUNNING" | "INTERRUPTED" | "COMPLETED" | "FAILED";
 
@@ -49,13 +53,11 @@ export interface BatchProgressRow {
   org_id: string | null;
   status: BatchStatus;
   total_items: number;
-  processed_count: number;
-  succeeded_count: number;
-  failed_count: number;
   resumed_count: number;
   attempts: number;
-  processed_keys: string[];
-  failures: BatchItemFailure[];
+  owner_id: string | null;
+  lease_expires_at: string | null;
+  fencing_token: number;
   last_error: string | null;
   actor: string | null;
   request_id: string | null;
@@ -109,18 +111,10 @@ export interface ResumableBatchOptions<T, K = string, R = unknown> extends Isola
   /** Stable across restarts, e.g. `ELIGIBILITY:<circular_id>:<rule_pack_version_id>`. */
   batchKey: string;
   orgId?: string;
-  /** Persist progress every N items. Defaults to AGENT_CHECKPOINT_EVERY. */
-  checkpointEvery?: number;
   /**
    * What to do when a stored row for this key is already COMPLETED.
    * Default true: clear the stored progress and run every item again, since
-   * re-invoking a finished batch is an explicit operator action (re-evaluate
-   * after a rule-pack change, re-send after a fix) and silently doing
-   * nothing would be the surprising behaviour. Set false to make the call a
-   * no-op that returns the stored summary.
-   *
-   * Crash recovery is unaffected either way: an interrupted run leaves the
-   * row RUNNING or INTERRUPTED, never COMPLETED, so it always resumes.
+   * re-invoking a finished batch is an explicit operator action.
    */
   rerunCompleted?: boolean;
 }
@@ -143,11 +137,7 @@ export interface ResumableBatchResult<K = string, R = unknown> extends IsolatedB
 
 /**
  * Runs `processItem` for every item, isolating failures per item.
- *
- * Never throws because of an item-level error: the returned summary carries
- * both the successful results and the per-item failure reasons, so the
- * caller decides what to do (report, flag, retry later) instead of losing
- * the whole batch to one bad row.
+ * Never throws because of an item-level error.
  */
 export async function runBatchIsolated<T, K = string, R = unknown>(
   options: IsolatedBatchOptions<T, K, R>
@@ -193,7 +183,6 @@ export async function runBatchIsolated<T, K = string, R = unknown>(
         try {
           await onItemFailure(key, item, err);
         } catch (flagErr) {
-          // Flagging is a courtesy, not part of the batch contract.
           logger.error("AGENT_BATCH_ITEM_FLAG_FAILED", {
             agent_name: agentName,
             item_key: String(key),
@@ -217,9 +206,6 @@ export async function runBatchIsolated<T, K = string, R = unknown>(
   };
 
   if (concurrency > 1 && items.length > 1) {
-    // Dispatch through the class pool: bounded parallelism, so a large batch
-    // gets faster without ever opening more DB connections than the pool
-    // (and DB_POOL_MAX) allows.
     const pool = getPoolForClass(agentClass);
     const tasks: Array<Promise<void>> = [];
     for (let i = 0; i < items.length; i++) {
@@ -233,8 +219,6 @@ export async function runBatchIsolated<T, K = string, R = unknown>(
     }
   }
 
-  // `results` was pre-sized to items.length; compact out any holes (there
-  // should be none — every index is either a success or a recorded failure).
   const compacted = results.filter((r) => r !== undefined);
 
   logger.info("AGENT_BATCH_COMPLETED", {
@@ -256,7 +240,7 @@ export async function runBatchIsolated<T, K = string, R = unknown>(
 }
 
 // ---------------------------------------------------------------------
-// Durable progress (agent_batch_progress)
+// Durable progress (agent_batch_progress + agent_batch_progress_item)
 // ---------------------------------------------------------------------
 
 function toProgressRow(row: any): BatchProgressRow {
@@ -266,13 +250,11 @@ function toProgressRow(row: any): BatchProgressRow {
     org_id: row.org_id ?? null,
     status: row.status,
     total_items: Number(row.total_items ?? 0),
-    processed_count: Number(row.processed_count ?? 0),
-    succeeded_count: Number(row.succeeded_count ?? 0),
-    failed_count: Number(row.failed_count ?? 0),
     resumed_count: Number(row.resumed_count ?? 0),
     attempts: Number(row.attempts ?? 1),
-    processed_keys: Array.isArray(row.processed_keys) ? row.processed_keys.map(String) : [],
-    failures: Array.isArray(row.failures) ? row.failures : [],
+    owner_id: row.owner_id ?? null,
+    lease_expires_at: row.lease_expires_at ?? null,
+    fencing_token: Number(row.fencing_token ?? 0),
     last_error: row.last_error ?? null,
     actor: row.actor ?? null,
     request_id: row.request_id ?? null,
@@ -282,7 +264,7 @@ function toProgressRow(row: any): BatchProgressRow {
   };
 }
 
-/** Reads persisted progress for a batch key, or null when there is none / the table is unavailable. */
+/** Reads persisted progress for a batch key, or null when there is none. */
 export async function loadBatchProgress(batchKey: string): Promise<BatchProgressRow | null> {
   try {
     const res = await db.query(`SELECT * FROM agent_batch_progress WHERE batch_key=$1`, [batchKey]);
@@ -298,16 +280,13 @@ function logCheckpointUnavailable(op: string, batchKey: string, err: unknown): v
     operation: op,
     batch_key: batchKey,
     error: err instanceof Error ? err.message : String(err),
-    hint: "Run `npm run migrate` to create agent_batch_progress (migration 0028). The batch continues without resume capability.",
+    hint: "Run `npm run migrate` to create agent_batch_progress (migration 0031). The batch continues without resume capability.",
   });
 }
 
 /**
  * Runs a checkpoint write, degrading to `fallback` instead of throwing when
- * the progress table is unavailable. The return value is the write's own
- * result, not merely "did not throw", so callers can tell "I persisted this"
- * apart from "there was nothing to persist" — a shutdown log claiming it
- * interrupted a batch that had already finished would be a lie.
+ * the progress table is unavailable.
  */
 async function safeCheckpoint<T>(op: string, batchKey: string, fn: () => Promise<T>, fallback: T): Promise<T> {
   try {
@@ -319,17 +298,26 @@ async function safeCheckpoint<T>(op: string, batchKey: string, fn: () => Promise
 }
 
 /**
- * Claims (or re-claims) a batch for this process. Returns the row to work
- * from, including any keys already processed by an interrupted run.
- *
- * All prior values are read first and then written back as explicit
- * parameters — the INSERT never sub-selects from its own target table, which
- * keeps the statement valid on every supported Postgres version and makes it
- * straightforward to reproduce in a fake DB.
+ * Custom error thrown when a fencing token mismatch is detected.
+ * Propagates out of executeResumableBatch to halt batch execution.
+ */
+export class FencingTokenError extends Error {
+  constructor(public batchKey: string, public expected: number, public actual: number) {
+    super(`Fencing token mismatch for batch '${batchKey}': expected ${expected}, row has ${actual}`);
+    this.name = "FencingTokenError";
+  }
+}
+
+/**
+ * Claims (or re-claims) a batch for this process. Returns the row, the
+ * fencing token, and any item keys already processed (from agent_batch_progress_item).
  */
 async function beginBatch<T, K, R>(options: ResumableBatchOptions<T, K, R>): Promise<{
   row: BatchProgressRow | null;
   alreadyCompleted: BatchProgressRow | null;
+  fencingToken: number;
+  alreadyProcessedKeys: Set<string>;
+  pastFailures: Array<{ key: string; error: string }>;
 }> {
   const {
     batchKey,
@@ -344,161 +332,216 @@ async function beginBatch<T, K, R>(options: ResumableBatchOptions<T, K, R>): Pro
   const existing = await loadBatchProgress(batchKey);
 
   if (existing && existing.status === "COMPLETED" && !rerunCompleted) {
-    return { row: existing, alreadyCompleted: existing };
+    return { row: existing, alreadyCompleted: existing, fencingToken: existing.fencing_token, alreadyProcessedKeys: new Set(), pastFailures: [] };
   }
 
-  // A COMPLETED row is not resume state — re-running it starts clean. Only
-  // RUNNING (owner died without a graceful shutdown) and INTERRUPTED (owner
-  // shut down cleanly, or the supervisor reclaimed it) carry prior progress.
-  const resumeFrom = existing && existing.status !== "COMPLETED" ? existing : null;
-  const priorKeys = resumeFrom?.processed_keys ?? [];
-  const priorFailures = resumeFrom?.failures ?? [];
+  const ownerId = crypto.randomUUID();
+  const leaseMs = env.AGENT_BATCH_LEASE_MS;
 
   let row: BatchProgressRow | null = null;
+  let fencingToken = 0;
+
   await safeCheckpoint(
     "begin",
     batchKey,
     async () => {
       const res = await db.query(
         `INSERT INTO agent_batch_progress
-           (batch_key, agent_name, org_id, status, total_items, processed_count, succeeded_count,
-            failed_count, resumed_count, attempts, processed_keys, failures, actor, request_id,
-            started_at, heartbeat_at)
-         VALUES ($1,$2,$3,'RUNNING',$4,$5,$6,$7,$8,1,$9::jsonb,$10::jsonb,$11,$12,now(),now())
+           (batch_key, agent_name, org_id, status, total_items,
+            owner_id, lease_expires_at, fencing_token,
+            actor, request_id, started_at, heartbeat_at)
+         VALUES ($1, $2, $3, 'RUNNING', $4,
+                 $5::uuid, now() + ($6 || ' milliseconds')::interval,
+                 COALESCE((SELECT fencing_token FROM agent_batch_progress WHERE batch_key = $1), 0) + 1,
+                 $7, $8, now(), now())
          ON CONFLICT (batch_key) DO UPDATE SET
-           agent_name=EXCLUDED.agent_name,
-           org_id=COALESCE(EXCLUDED.org_id, agent_batch_progress.org_id),
-           status='RUNNING',
-           total_items=EXCLUDED.total_items,
-           processed_count=EXCLUDED.processed_count,
-           succeeded_count=EXCLUDED.succeeded_count,
-           failed_count=EXCLUDED.failed_count,
-           resumed_count=EXCLUDED.resumed_count,
-           attempts=agent_batch_progress.attempts + 1,
-           processed_keys=EXCLUDED.processed_keys,
-           failures=EXCLUDED.failures,
-           actor=EXCLUDED.actor,
-           request_id=EXCLUDED.request_id,
-           last_error=NULL,
-           completed_at=NULL,
-           heartbeat_at=now(),
-           updated_at=now()
+           status = 'RUNNING',
+           owner_id = $5::uuid,
+           lease_expires_at = now() + ($6 || ' milliseconds')::interval,
+           fencing_token = agent_batch_progress.fencing_token + 1,
+           attempts = agent_batch_progress.attempts + 1,
+           actor = EXCLUDED.actor,
+           request_id = EXCLUDED.request_id,
+           last_error = NULL,
+           completed_at = NULL,
+           heartbeat_at = now(),
+           updated_at = now()
          RETURNING *`,
         [
           batchKey,
           agentName,
           orgId ?? null,
           items.length,
-          priorKeys.length,
-          resumeFrom?.succeeded_count ?? 0,
-          priorFailures.length,
-          resumeFrom?.resumed_count ?? 0,
-          JSON.stringify(priorKeys),
-          JSON.stringify(priorFailures),
+          ownerId,
+          String(leaseMs),
           actor,
           requestId ?? null,
         ]
       );
       row = toProgressRow(res.rows[0]);
+      fencingToken = row.fencing_token;
     },
     undefined
   );
 
   // If the claim write failed but the read succeeded, keep resuming from what
   // we could read — losing the checkpoint must not lose the progress.
-  if (row === null) row = resumeFrom;
-
-  return { row, alreadyCompleted: null };
-}
-
-async function persistCheckpoint(
-  batchKey: string,
-  patch: {
-    processed_keys: string[];
-    failures: BatchItemFailure[];
-    processed_count: number;
-    succeeded_count: number;
-    failed_count: number;
-    resumed_count: number;
-    last_error?: string | null;
+  if (row === null) {
+    row = existing && existing.status !== "COMPLETED" ? existing : null;
+    fencingToken = row?.fencing_token ?? 0;
   }
-): Promise<boolean> {
-  return safeCheckpoint(
-    "checkpoint",
-    batchKey,
-    async () => {
-      await db.query(
-        `UPDATE agent_batch_progress
-           SET processed_keys=$2::jsonb, failures=$3::jsonb, processed_count=$4,
-               succeeded_count=$5, failed_count=$6, resumed_count=$7, last_error=$8,
-               heartbeat_at=now(), updated_at=now()
-         WHERE batch_key=$1`,
-        [
-          batchKey,
-          JSON.stringify(patch.processed_keys),
-          JSON.stringify(patch.failures),
-          patch.processed_count,
-          patch.succeeded_count,
-          patch.failed_count,
-          patch.resumed_count,
-          patch.last_error ?? null,
-        ]
+
+  // When re-running a COMPLETED batch, clear old per-item progress so items are re-processed.
+  const wasCompleted = existing?.status === "COMPLETED" && rerunCompleted;
+  if (wasCompleted) {
+    try {
+      await db.query(`DELETE FROM agent_batch_progress_item WHERE batch_key = $1`, [batchKey]);
+    } catch { /* best-effort */ }
+  }
+
+  // Read already-processed items from the per-item table (replaces JSONB processed_keys)
+  const alreadyProcessedKeys = new Set<string>();
+  const pastFailures: Array<{ key: string; error: string }> = [];
+  if (row && !wasCompleted) {
+    try {
+      const itemRes = await db.query<{ item_key: string; status: string; error: string | null }>(
+        `SELECT item_key, status, error FROM agent_batch_progress_item WHERE batch_key = $1`,
+        [batchKey]
       );
-      return true;
-    },
-    false
-  );
+      for (const r of itemRes.rows) {
+        // Both PROCESSED and FAILED items are skipped on resume:
+        // a failed item was already handled, flagged, and reported.
+        alreadyProcessedKeys.add(r.item_key);
+        if (r.status === "FAILED" && r.error) {
+          pastFailures.push({ key: r.item_key, error: r.error });
+        }
+      }
+    } catch (err) {
+      logCheckpointUnavailable("read_items", batchKey, err);
+    }
+  }
+
+  return { row, alreadyCompleted: null, fencingToken, alreadyProcessedKeys, pastFailures };
 }
 
+/**
+ * Per-item checkpoint: INSERT into agent_batch_progress_item.
+ * Called after every item (success → PROCESSED, failure → FAILED).
+ * O(1) per item, not O(n) like the old JSONB array rewrite.
+ */
+async function writeItemCheckpoint(
+  batchKey: string,
+  itemKey: string,
+  status: "PROCESSED" | "FAILED",
+  error: string | null = null
+): Promise<void> {
+  try {
+    await db.query(
+      `INSERT INTO agent_batch_progress_item (batch_key, item_key, status, error)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (batch_key, item_key) DO UPDATE
+         SET status = EXCLUDED.status,
+             error = EXCLUDED.error,
+             processed_at = now()`,
+      [batchKey, itemKey, status, error]
+    );
+  } catch (err) {
+    logCheckpointUnavailable("write_item", batchKey, err);
+  }
+}
+
+/**
+ * Final batch status write. Carries fencing to prevent a reclaimed process
+ * from marking the batch complete.
+ */
 async function finishBatch(
   batchKey: string,
   status: BatchStatus,
-  patch: {
-    processed_keys: string[];
-    failures: BatchItemFailure[];
-    processed_count: number;
-    succeeded_count: number;
-    failed_count: number;
-    resumed_count: number;
-    total_items: number;
-    last_error?: string | null;
-  }
+  fencingToken: number
 ): Promise<boolean> {
   return safeCheckpoint(
     "finish",
     batchKey,
     async () => {
-      await db.query(
+      const res = await db.query(
         `UPDATE agent_batch_progress
-           SET status=$2, processed_keys=$3::jsonb, failures=$4::jsonb, processed_count=$5,
-               succeeded_count=$6, failed_count=$7, resumed_count=$8, total_items=$9,
-               last_error=$10, completed_at=CASE WHEN $2 IN ('COMPLETED','FAILED') THEN now() ELSE completed_at END,
-               heartbeat_at=now(), updated_at=now()
-         WHERE batch_key=$1`,
-        [
-          batchKey,
-          status,
-          JSON.stringify(patch.processed_keys),
-          JSON.stringify(patch.failures),
-          patch.processed_count,
-          patch.succeeded_count,
-          patch.failed_count,
-          patch.resumed_count,
-          patch.total_items,
-          patch.last_error ?? null,
-        ]
+           SET status = $2,
+               completed_at = CASE WHEN $2 IN ('COMPLETED','FAILED') THEN now() ELSE completed_at END,
+               heartbeat_at = now(),
+               lease_expires_at = NULL,
+               updated_at = now()
+         WHERE batch_key = $1
+           AND fencing_token = $3`,
+        [batchKey, status, fencingToken]
       );
-      return true;
+      return (res?.rowCount ?? 0) > 0;
     },
     false
   );
 }
 
 /**
+ * Reads derived counts from agent_batch_progress_item.
+ */
+async function readBatchCounts(batchKey: string): Promise<{
+  processed_count: number;
+  succeeded_count: number;
+  failed_count: number;
+}> {
+  try {
+    const res = await db.query<{
+      processed_count: string;
+      succeeded_count: string;
+      failed_count: string;
+    }>(
+      `SELECT
+         COUNT(*) AS processed_count,
+         COUNT(*) FILTER (WHERE status = 'PROCESSED') AS succeeded_count,
+         COUNT(*) FILTER (WHERE status = 'FAILED') AS failed_count
+       FROM agent_batch_progress_item
+       WHERE batch_key = $1`,
+      [batchKey]
+    );
+    return {
+      processed_count: Number(res.rows[0]?.processed_count ?? 0),
+      succeeded_count: Number(res.rows[0]?.succeeded_count ?? 0),
+      failed_count: Number(res.rows[0]?.failed_count ?? 0),
+    };
+  } catch {
+    return { processed_count: 0, succeeded_count: 0, failed_count: 0 };
+  }
+}
+
+/**
+ * Starts a heartbeat interval that refreshes the batch lease.
+ * Returns a cleanup function. Caller MUST invoke in BOTH success and
+ * failure paths (typically in a `finally` block).
+ */
+function startHeartbeat(batchKey: string, leaseMs: number, heartbeatMs: number): () => void {
+  const interval = setInterval(async () => {
+    try {
+      await db.query(
+        `UPDATE agent_batch_progress
+            SET lease_expires_at = now() + ($2 || ' milliseconds')::interval,
+                heartbeat_at = now()
+          WHERE batch_key = $1 AND status = 'RUNNING'`,
+        [batchKey, String(leaseMs)]
+      );
+    } catch (err) {
+      logger.error("HEARTBEAT_FAILED", {
+        batch_key: batchKey,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }, heartbeatMs);
+
+  return () => clearInterval(interval);
+}
+
+/**
  * Marks a RUNNING batch INTERRUPTED so the next run resumes it. Used on
- * graceful shutdown. Resolves false when there was no RUNNING row to mark
- * (already finished, or already interrupted), so the shutdown report counts
- * only batches it actually changed.
+ * graceful shutdown. No fencing check — the owning process always has the
+ * current token on SIGTERM.
  */
 export async function markBatchInterrupted(batchKey: string, reason: string): Promise<boolean> {
   return safeCheckpoint(
@@ -507,7 +550,7 @@ export async function markBatchInterrupted(batchKey: string, reason: string): Pr
     async () => {
       const res = await db.query(
         `UPDATE agent_batch_progress
-         SET status='INTERRUPTED', last_error=$2, heartbeat_at=now(), updated_at=now()
+         SET status='INTERRUPTED', lease_expires_at=NULL, last_error=$2, updated_at=now()
        WHERE batch_key=$1 AND status='RUNNING'`,
         [batchKey, reason]
       );
@@ -518,28 +561,32 @@ export async function markBatchInterrupted(batchKey: string, reason: string): Pr
 }
 
 /**
- * Startup recovery: any batch left RUNNING whose heartbeat has gone stale
- * belonged to a process that died without a graceful shutdown. Marking it
- * INTERRUPTED makes it eligible for resume and visible to operators.
- * Returns the number of rows reclaimed.
+ * Startup recovery: any batch left RUNNING whose lease has expired belonged
+ * to a process that died without a graceful shutdown. Marking it
+ * INTERRUPTED makes it eligible for resume. Returns the number reclaimed.
+ *
+ * Quest 03: no longer takes a staleAfterMs parameter. Recovery uses
+ * lease_expires_at < now() directly — the lease IS the threshold.
  */
-export async function recoverInterruptedBatches(staleAfterMs: number = env.AGENT_BATCH_STALE_AFTER_MS): Promise<number> {
+export async function recoverInterruptedBatches(): Promise<number> {
   try {
     const res = await db.query(
       `UPDATE agent_batch_progress
          SET status='INTERRUPTED',
-             last_error=COALESCE(last_error, 'Reclaimed by supervisor: heartbeat older than ' || $1 || 'ms'),
+             owner_id = NULL,
+             lease_expires_at = NULL,
+             fencing_token = fencing_token + 1,
+             last_error = COALESCE(last_error, 'Reclaimed by supervisor: lease expired'),
              updated_at=now()
-       WHERE status='RUNNING' AND heartbeat_at < now() - ($1 || ' milliseconds')::interval
-       RETURNING batch_key, agent_name`,
-      [String(staleAfterMs)]
+       WHERE status='RUNNING' AND lease_expires_at < now()
+       RETURNING batch_key, agent_name, fencing_token`,
+      []
     );
     const reclaimed = res.rows ?? [];
     if (reclaimed.length > 0) {
       logger.warn("AGENT_BATCHES_RECLAIMED", {
         count: reclaimed.length,
         batch_keys: reclaimed.map((r: any) => r.batch_key),
-        stale_after_ms: staleAfterMs,
       });
     }
     return reclaimed.length;
@@ -556,8 +603,8 @@ export async function recoverInterruptedBatches(staleAfterMs: number = env.AGENT
 /**
  * Batch keys a resumable run in *this* process currently owns. The
  * supervisor reads it on SIGTERM/SIGINT so an orderly shutdown can mark
- * those rows INTERRUPTED immediately instead of waiting for the heartbeat
- * to go stale (see ./supervisor.ts).
+ * those rows INTERRUPTED immediately instead of waiting for the lease to
+ * expire (see ./supervisor.ts).
  */
 const activeBatchKeys = new Set<string>();
 
@@ -566,20 +613,13 @@ export function listActiveBatchKeys(): string[] {
 }
 
 /**
- * `runBatchIsolated` + durable progress.
+ * `runBatchIsolated` + durable progress with lease/fencing protection.
  *
- * On start it loads any prior progress for `batchKey`; items whose keys are
- * already in `processed_keys` are skipped (counted as `resumed_skipped`), so
- * a batch interrupted by a crash, a deploy, or an OOM completes the
- * remainder instead of repeating side effects already committed.
- *
- * A batch whose stored row is already COMPLETED carries no resume state, so
- * by default it runs again from scratch (`rerunCompleted`, the default:
- * re-invoking a finished batch is an explicit operator action and silently
- * doing nothing would be the surprising behaviour). Pass
- * `rerunCompleted: false` for no-op semantics that return the stored
- * summary. Crash recovery is identical either way — an interrupted run
- * leaves the row RUNNING or INTERRUPTED, never COMPLETED, so it resumes.
+ * On start it loads any prior progress for `batchKey` from
+ * agent_batch_progress_item; items whose keys are already there are
+ * skipped (counted as `resumed_skipped`), so a batch interrupted by a
+ * crash, deploy, or OOM completes the remainder instead of repeating side
+ * effects already committed.
  */
 export async function runResumableBatch<T, K extends string = string, R = unknown>(
   options: ResumableBatchOptions<T, K, R>
@@ -602,44 +642,38 @@ async function executeResumableBatch<T, K extends string = string, R = unknown>(
     itemKey,
     actor = agentName,
     request_id: requestId,
-    checkpointEvery = env.AGENT_CHECKPOINT_EVERY,
     orgId,
   } = options;
 
-  const { row, alreadyCompleted } = await beginBatch(options);
+  const { row, alreadyCompleted, fencingToken, alreadyProcessedKeys, pastFailures } = await beginBatch(options);
 
   if (alreadyCompleted) {
     logger.info("AGENT_BATCH_ALREADY_COMPLETED", { batch_key: batchKey, agent_name: agentName });
+    const counts = await readBatchCounts(batchKey);
     return {
       agent_name: agentName,
       total: alreadyCompleted.total_items,
-      ok: alreadyCompleted.succeeded_count,
-      failed: alreadyCompleted.failed_count,
+      ok: counts.succeeded_count,
+      failed: counts.failed_count,
       results: [],
-      failures: alreadyCompleted.failures as BatchItemFailure<K>[],
+      failures: [],
       batch_key: batchKey,
       status: "COMPLETED",
       attempts: alreadyCompleted.attempts,
-      resumed_skipped: alreadyCompleted.processed_count,
+      resumed_skipped: counts.processed_count,
       already_completed: true,
       checkpointing_available: true,
     };
   }
 
-  const alreadyProcessed = new Set<string>(row?.processed_keys ?? []);
-  const priorFailures: BatchItemFailure[] = (row?.failures ?? []).map((f) => ({ key: String(f.key), error: f.error }));
-  // Prior-run tallies are carried forward so the persisted row always
-  // describes the whole batch, not just this run's slice of it. The
-  // succeeded + failed == processed identity the table's CHECK constraint
-  // relies on is preserved by adding this run's counts to the prior ones.
-  const priorSucceeded = row?.succeeded_count ?? 0;
   const attempts = row?.attempts ?? 1;
-  const resumedCount = alreadyProcessed.size;
+  const resumedCount = alreadyProcessedKeys.size;
 
+  // Build the pending list: items not yet in agent_batch_progress_item
   const pending: Array<{ item: T; index: number; key: K }> = [];
   for (let i = 0; i < items.length; i++) {
     const key = itemKey(items[i], i);
-    if (alreadyProcessed.has(String(key))) {
+    if (alreadyProcessedKeys.has(String(key))) {
       metrics.agentBatchItemsTotal.inc({ agent: agentName, status: "resumed_skipped" });
       continue;
     }
@@ -666,94 +700,104 @@ async function executeResumableBatch<T, K extends string = string, R = unknown>(
       reason_code: "AGENT_BATCH_RESUMED",
       reason_comment: `Batch '${batchKey}' restarted after an interruption (attempt ${attempts}); ${resumedCount} item(s) already processed were skipped, ${pending.length} remained.`,
     });
+    // Persist resumed_count on the batch row for observability.
+    await safeCheckpoint("update_resumed_count", batchKey, async () => {
+      await db.query(
+        `UPDATE agent_batch_progress SET resumed_count = $2, updated_at = now() WHERE batch_key = $1`,
+        [batchKey, resumedCount]
+      );
+    }, undefined);
   }
 
-  // Carry prior failures forward so the final summary describes the *whole*
-  // batch, not only this run's slice of it.
-  const failures: BatchItemFailure<K>[] = [...(priorFailures as BatchItemFailure<K>[])];
-  const processedKeys: string[] = [...alreadyProcessed];
+  const failures: BatchItemFailure<K>[] = [];
   const results: BatchItemSuccess<K, R>[] = [];
   let okCount = 0;
   let newFailures = 0;
-  let sinceCheckpoint = 0;
   let checkpointingAvailable = row !== null;
+  let currentFencingToken = fencingToken;
 
-  const writeCheckpoint = async (final: boolean): Promise<void> => {
-    const patch = {
-      processed_keys: processedKeys,
-      failures: failures as BatchItemFailure[],
-      processed_count: processedKeys.length,
-      succeeded_count: priorSucceeded + okCount,
-      failed_count: failures.length,
-      resumed_count: resumedCount,
-      // If a caller re-runs a batch key with a smaller item list than a
-      // previous attempt, never report a total below the work already done.
-      total_items: Math.max(items.length, processedKeys.length),
-    };
-    const okWrite = final
-      ? await finishBatch(batchKey, "COMPLETED", patch)
-      : await persistCheckpoint(batchKey, patch);
-    if (!okWrite) checkpointingAvailable = false;
-  };
+  // Start heartbeat — MUST be cleared in finally block
+  const stopHeartbeat = startHeartbeat(batchKey, env.AGENT_BATCH_LEASE_MS, env.AGENT_BATCH_HEARTBEAT_MS);
 
-  for (const entry of pending) {
-    const { item, index, key } = entry;
-    try {
-      const result = await options.processItem(item, index);
-      results.push({ key, index, result });
-      okCount += 1;
-      metrics.agentBatchItemsTotal.inc({ agent: agentName, status: "ok" });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      failures.push({ key, error: message });
-      newFailures += 1;
-      metrics.agentBatchItemsTotal.inc({ agent: agentName, status: "failed" });
-      logger.error("AGENT_BATCH_ITEM_FAILED", {
-        batch_key: batchKey,
-        agent_name: agentName,
-        request_id: requestId,
-        item_key: String(key),
-        item_index: index,
-        error: message,
-      });
-      if (options.onItemFailure) {
-        try {
-          await options.onItemFailure(key, item, err);
-        } catch (flagErr) {
-          logger.error("AGENT_BATCH_ITEM_FLAG_FAILED", {
-            batch_key: batchKey,
-            agent_name: agentName,
-            item_key: String(key),
-            error: flagErr instanceof Error ? flagErr.message : String(flagErr),
+  try {
+    for (const entry of pending) {
+      const { item, index, key } = entry;
+      try {
+        const result = await options.processItem(item, index);
+        results.push({ key, index, result });
+        okCount += 1;
+        metrics.agentBatchItemsTotal.inc({ agent: agentName, status: "ok" });
+
+        // Per-item checkpoint: O(1) INSERT, not O(n) JSONB rewrite
+        await writeItemCheckpoint(batchKey, String(key), "PROCESSED");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        failures.push({ key, error: message });
+        newFailures += 1;
+        metrics.agentBatchItemsTotal.inc({ agent: agentName, status: "failed" });
+        logger.error("AGENT_BATCH_ITEM_FAILED", {
+          batch_key: batchKey,
+          agent_name: agentName,
+          request_id: requestId,
+          item_key: String(key),
+          item_index: index,
+          error: message,
+        });
+
+        // Per-item failure checkpoint
+        await writeItemCheckpoint(batchKey, String(key), "FAILED", message);
+
+        if (options.onItemFailure) {
+          try {
+            await options.onItemFailure(key, item, err);
+          } catch (flagErr) {
+            logger.error("AGENT_BATCH_ITEM_FLAG_FAILED", {
+              batch_key: batchKey,
+              agent_name: agentName,
+              item_key: String(key),
+              error: flagErr instanceof Error ? flagErr.message : String(flagErr),
+            });
+          }
+        }
+        if (options.auditFailures !== false) {
+          await logAudit({
+            org_id: orgId,
+            entity_type: options.entity_type ?? "AGENT_BATCH",
+            entity_id: String(key),
+            agent_or_user: actor,
+            action: "AGENT_BATCH_ITEM_FAILED",
+            input_value: { agent_name: agentName, batch_key: batchKey, batch_item_index: index, request_id: requestId },
+            reason_code: "AGENT_ITEM_ERROR",
+            reason_comment: `Batch item failed in isolation; the remaining item(s) continued. Error: ${message}`,
           });
         }
       }
-      if (options.auditFailures !== false) {
-        await logAudit({
-          org_id: orgId,
-          entity_type: options.entity_type ?? "AGENT_BATCH",
-          entity_id: String(key),
-          agent_or_user: actor,
-          action: "AGENT_BATCH_ITEM_FAILED",
-          input_value: { agent_name: agentName, batch_key: batchKey, batch_item_index: index, request_id: requestId },
-          reason_code: "AGENT_ITEM_ERROR",
-          reason_comment: `Batch item failed in isolation; the remaining item(s) continued. Error: ${message}`,
-        });
-      }
     }
 
-    // A failed item is still "processed": it was handled, flagged and
-    // reported. Re-running it after a crash could repeat a side effect that
-    // already landed, which is worse than reporting it twice.
-    processedKeys.push(String(key));
-    sinceCheckpoint += 1;
-    if (sinceCheckpoint >= checkpointEvery) {
-      sinceCheckpoint = 0;
-      await writeCheckpoint(false);
+    // Final batch status write with fencing
+    const okWrite = await finishBatch(batchKey, "COMPLETED", currentFencingToken);
+    if (!okWrite && row !== null) {
+      checkpointingAvailable = false;
+      logger.error("AGENT_BATCH_FENCING_MISMATCH", {
+        batch_key: batchKey,
+        fencing_token: currentFencingToken,
+        operation: "finishBatch",
+      });
+      await logAudit({
+        org_id: orgId,
+        entity_type: "AGENT_BATCH",
+        entity_id: batchKey,
+        agent_or_user: "SYSTEM",
+        action: "FENCING_TOKEN_MISMATCH",
+        reason_code: "FENCING_TOKEN_MISMATCH",
+        reason_comment: `finishBatch fencing mismatch for batch '${batchKey}' (token ${currentFencingToken}); batch may have been reclaimed.`,
+      });
+      throw new FencingTokenError(batchKey, currentFencingToken, -1);
     }
+  } finally {
+    // ALWAYS clear heartbeat on BOTH success and failure paths
+    stopHeartbeat();
   }
-
-  await writeCheckpoint(true);
 
   await logAudit({
     org_id: orgId,
@@ -785,6 +829,11 @@ async function executeResumableBatch<T, K extends string = string, R = unknown>(
   });
 
   results.sort((a, b) => a.index - b.index);
+
+  // Merge failures carried forward from a previous attempt (resume scenario).
+  for (const pf of pastFailures) {
+    failures.push({ key: pf.key as unknown as K, error: pf.error });
+  }
 
   return {
     agent_name: agentName,

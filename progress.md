@@ -2488,3 +2488,33 @@ _Quest 01 verified: all components executed against real Postgres, real Express,
 ---
 
 _Quest 02 verified by execution: 318 backend tests passing (19 suites, including 10 real-DB tests against live Postgres), 46 UI tests passing, typecheck clean, lint clean. Migration 0030 applied and backfill-tested on real Postgres. CHECK constraint enforcement confirmed via psql. Browser E2E: 5 screenshots in docs/e2e-evidence/quest-02/. Cross-tenant leakage structurally impossible._
+
+---
+
+## Quest 03 — Pipeline Wiring + Checkpoint Redesign Trust Ledger
+
+| Status | Component | Execution Evidence | Result | Notes |
+|---|---|---|---|---|
+| IMPLEMENTED (audit) | Migration 0031_batch_checkpoint_redesign.sql | Applied to fresh Postgres; idempotent re-run = 0 errors | verified — Checkpoint 1 via psql execution | New table agent_batch_progress_item, lease/fencing columns, CONTINUE_FROM_GATE stage, resolved_by_name |
+| IMPLEMENTED (audit) | batch.ts checkpoint rewrite | Per-item INSERTs replace JSONB array appends; lease claim with fencing token; pastFailures carry-forward; COMPLETED re-run item clearing | verified — 11/11 batch tests pass after 5 bug fixes | SELECT spacing, attempts increment, resumed_count persistence, past failures carry-forward, COMPLETED re-run |
+| IMPLEMENTED (audit) | fake_agent_runtime_db.ts | SELECT matching relaxed, DELETE handler, resumed_count handler, attempts increment, error column | verified — all 11 batch tests pass against updated fake | |
+| IMPLEMENTED (audit) | pipeline.ts stage refactor | All 6 waitForHumanGate replaced with createGate; new continueFromGate dispatcher; rejection semantics | verified — 0 waitForHumanGate in pipeline.ts, 6 createGate calls | Checkpoint 2 grep verification |
+| IMPLEMENTED (audit) | hil_gates.ts | createGate accepts payload; resolveGate stores resolved_by_name + enqueues CONTINUE_FROM_GATE; listPendingGates | verified — 18/18 real-DB tests pass | |
+| IMPLEMENTED (audit) | gates.routes.ts | GET / endpoint for gate discovery (pending gates for caller's org) | verified — via supertest in pipeline_continuation_real.test.ts | |
+| IMPLEMENTED (audit) | queue/types.ts | CONTINUE_FROM_GATE added to EvaluationStage; requested_by optional; gate_id + requested_by_name fields | verified — TypeScript compiles clean | |
+| IMPLEMENTED (audit) | HilGateInbox.tsx | Lists pending gates, expandable rows, resolve form with APPROVE/REJECT + mandatory reason, keyboard navigation, amber/teal/terracotta colors | verified — tsc --noEmit clean, 46 UI tests pass | Follows UROS System UI:UX Direction — Locked.md |
+| IMPLEMENTED (audit) | API client functions | fetchGates, fetchGateDetail, resolveGate, fetchResolvedGateCount in client.ts; usePendingGates, useResolveGate in hooks_gates.ts | verified — TypeScript compiles, wired into App.tsx as HIL Gates tab | |
+| IMPLEMENTED (audit) | Backend test suite | `npx jest --no-coverage` — 336 passing, 0 failing across 20 suites | verified — executed 2026-09-29 | 318 original + 18 new real-DB pipeline continuation tests |
+| IMPLEMENTED (audit) | pipeline_continuation_real.test.ts | 18 assertions against real Postgres: all 6 gate types lifecycle, resolved_by_name, CONTINUE_FROM_GATE job enqueuing, rejection semantics, gate inbox API, schema verification | verified — 18/18 pass | Checkpoint 3 |
+| IMPLEMENTED (audit) | UI test suite | `npx vitest run` — 46 passing, 0 failing across 11 test files | verified | |
+| IMPLEMENTED (audit) | Typecheck (backend) | `npx tsc --noEmit` — 0 errors | verified | |
+| IMPLEMENTED (audit) | Typecheck (UI) | `npx tsc --noEmit` in src/ui — 0 errors | verified | |
+| IMPLEMENTED (audit) | docs/architecture.md | Created with Mermaid diagrams: gate-driven pipeline flow, gate resolution sequence, batch checkpoint lifecycle, lease/fencing protocol, per-item checkpoint | verified | |
+| IMPLEMENTED (audit) | docs/data-model.md | Updated with Quest 03: agent_batch_progress_item table, new columns on agent_batch_progress, dropped JSONB columns, new evaluation_jobs columns, gate_events.resolved_by_name, new indexes | verified | |
+| IMPLEMENTED (audit) | docs/rebuild-log.md | Added Quest 03 entry: reason (O(n²) write amplification, no lease/fencing), schema changes, code changes, breaking changes | verified | |
+| IMPLEMENTED (audit) | docs/runbooks/troubleshooting.md | Added §10: Reclaiming stuck batches — INTERRUPTED as durable state, inspection SQL, resume/fail options, fencing token safety, scheduled reclamation | verified | |
+| IMPLEMENTED (audit) | .gitignore | evidence.html added to prevent committing Qoder verification artifacts | verified | |
+
+---
+
+_Quest 03 verified by execution: 336 backend tests passing (20 suites, including 18 real-DB pipeline continuation tests against live Postgres), 46 UI tests passing, typecheck clean. Migration 0031 applied and verified via Checkpoint 1 (psql). Pipeline refactor verified via Checkpoint 2 (grep + tests). Gate lifecycle + rejection semantics verified via Checkpoint 3 (real-DB tests). HIL Gate Inbox UI wired into dashboard as new tab._
