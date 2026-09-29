@@ -1,5 +1,6 @@
 import { useAuditStream } from "../api/hooks";
-import { getToken, ApiError } from "../api/client";
+import { getToken, ApiError, API_V1 } from "../api/client";
+import { DownloadButton } from "./DownloadButton";
 
 export function AuditStream() {
   const { data, isLoading, isError, error } = useAuditStream();
@@ -10,6 +11,11 @@ export function AuditStream() {
   return (
     <div className="flex h-full flex-col rounded-lg border border-border-soft bg-surface p-4">
       <h2 className="mb-3 text-sm font-semibold text-text-primary">Audit Stream</h2>
+
+      <div className="mb-2 flex gap-2">
+        <DownloadButton endpoint={`${API_V1}/audit-logs/export?format=csv`} format="csv" filename="audit-log.csv" label="Export CSV" size="sm" />
+        <DownloadButton endpoint={`${API_V1}/audit-logs/export?format=json`} format="json" filename="audit-log.json" label="Export JSON" size="sm" />
+      </div>
 
       {!hasToken ? (
         <EmptyState message="Connect with a dev token to view the audit trail." />

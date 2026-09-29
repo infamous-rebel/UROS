@@ -6,7 +6,6 @@ import {
   useSourceEffectiveness,
   useFunnelAnalysis,
   useQualityHireCost,
-  downloadAnalyticsExport,
   SOURCE_PLATFORMS,
   SourcePlatform,
   UnderperformanceFlag,
@@ -14,8 +13,9 @@ import {
   SourceEffectivenessMetrics,
   QualityHireSourceCost,
 } from "../hooks/hooks_analytics";
-import { getToken } from "../api/client";
+import { getToken, API_V1 } from "../api/client";
 import { EmptyState } from "./EmptyState";
+import { DownloadButton } from "./DownloadButton";
 
 const FUNNEL_STAGE_LABEL: Record<FunnelStage["stage"], string> = {
   APPLIED: "Applied",
@@ -145,34 +145,18 @@ function ExportButtons({
   circularId?: string;
   timeWindowDays?: number;
 }) {
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const run = async (format: "pdf" | "csv" | "excel") => {
-    setBusy(format);
-    setError(null);
-    try {
-      await downloadAnalyticsExport(report, format, { circular_id: circularId, time_window_days: timeWindowDays });
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
+  const qs = (fmt: string) => {
+    const p = new URLSearchParams({ report, format: fmt });
+    if (circularId) p.set("circular_id", circularId);
+    if (timeWindowDays) p.set("time_window_days", String(timeWindowDays));
+    return `${API_V1}/analytics/export?${p}`;
   };
 
   return (
     <div className="flex items-center gap-2">
-      {(["csv", "excel", "pdf"] as const).map((f) => (
-        <button
-          key={f}
-          disabled={busy === f}
-          onClick={() => run(f)}
-          className="rounded-md border border-border-soft px-2.5 py-1 text-[11px] font-medium text-text-secondary disabled:opacity-50"
-        >
-          {busy === f ? "Exporting…" : f.toUpperCase()}
-        </button>
-      ))}
-      {error && <span className="text-[11px] text-danger">{error}</span>}
+      <DownloadButton endpoint={qs("csv")} format="csv" filename={`${report}.csv`} label="CSV" size="sm" />
+      <DownloadButton endpoint={qs("excel")} format="xlsx" filename={`${report}.xlsx`} label="Excel" size="sm" />
+      <DownloadButton endpoint={qs("pdf")} format="pdf" filename={`${report}.pdf`} label="PDF" size="sm" />
     </div>
   );
 }

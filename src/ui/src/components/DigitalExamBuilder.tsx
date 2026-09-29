@@ -15,8 +15,9 @@ import {
   DigitalExamSubmission,
 } from "../hooks/hooks_exams";
 import { usePersonas } from "../api/hooks_hr";
-import { getToken } from "../api/client";
+import { getToken, API_V1 } from "../api/client";
 import { EmptyState } from "./EmptyState";
+import { DownloadButton } from "./DownloadButton";
 
 type DraftQuestion = Omit<ApiExamQuestion, "question_id" | "section_id"> & { question_id: string };
 type DraftSection = Omit<ApiExamSection, "section_id" | "exam_id" | "questions"> & { section_id: string; questions: DraftQuestion[] };
@@ -177,12 +178,18 @@ function ResultsPanel({ examId }: { examId: string }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap gap-2">
-        {data.status_counts.map((row) => (
-          <div key={row.status} className="rounded-md border border-border-soft bg-surface px-2.5 py-1.5 text-xs">
-            <span className="font-semibold text-text-primary">{row.count}</span> <span className="text-text-secondary">{row.status.replace("_", " ")}</span>
-          </div>
-        ))}
+      <div className="flex items-center gap-2">
+        <div className="flex flex-wrap gap-2">
+          {data.status_counts.map((row) => (
+            <div key={row.status} className="rounded-md border border-border-soft bg-surface px-2.5 py-1.5 text-xs">
+              <span className="font-semibold text-text-primary">{row.count}</span> <span className="text-text-secondary">{row.status.replace("_", " ")}</span>
+            </div>
+          ))}
+        </div>
+        <div className="ml-auto flex gap-2">
+          <DownloadButton endpoint={`${API_V1}/exams/${examId}/export?format=pdf`} format="pdf" filename={`exam-${examId.slice(0, 8)}.pdf`} label="Results PDF" size="sm" />
+          <DownloadButton endpoint={`${API_V1}/exams/${examId}/export?format=docx`} format="docx" filename={`exam-${examId.slice(0, 8)}.docx`} label="Results DOCX" size="sm" />
+        </div>
       </div>
       {data.submissions.map((s) => (
         <SubmissionRow key={s.submission_id} examId={examId} submission={s} />
@@ -471,6 +478,12 @@ export function DigitalExamBuilder() {
           />
         </label>
         {parse.isPending && <span className="text-xs text-text-secondary">Parsing…</span>}
+        {activeExamId && (
+          <div className="ml-auto flex gap-2">
+            <DownloadButton endpoint={`${API_V1}/exams/${activeExamId}/export?format=pdf`} format="pdf" filename="exam-paper.pdf" label="Paper PDF" size="sm" />
+            <DownloadButton endpoint={`${API_V1}/exams/${activeExamId}/export?format=docx`} format="docx" filename="exam-paper.docx" label="Paper DOCX" size="sm" />
+          </div>
+        )}
       </div>
       {parse.data?.error && <EmptyState message={parse.data.error} tone="danger" />}
 

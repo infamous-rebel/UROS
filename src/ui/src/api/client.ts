@@ -101,7 +101,7 @@ export function refreshAccessToken(): Promise<boolean> {
   return refreshInFlight;
 }
 
-async function request<T>(path: string, init?: RequestInit, allowRefresh = true): Promise<T> {
+async function request<T>(path: string, init?: RequestInit & { raw?: boolean }, allowRefresh = true): Promise<T> {
   const token = getToken();
   const res = await fetch(path, {
     ...init,
@@ -122,6 +122,9 @@ async function request<T>(path: string, init?: RequestInit, allowRefresh = true)
     notifySessionEnded();
   }
 
+  // Raw mode: return the Response object itself (for blob downloads)
+  if (init?.raw) return res as unknown as T;
+
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new ApiError(res.status, body.error ?? `Request failed with status ${res.status}`, body.error_code);
@@ -129,7 +132,7 @@ async function request<T>(path: string, init?: RequestInit, allowRefresh = true)
   return res.json() as Promise<T>;
 }
 
-export async function authedRequest<T>(path: string, init?: RequestInit): Promise<T> {
+export async function authedRequest<T>(path: string, init?: RequestInit & { raw?: boolean }): Promise<T> {
   return request<T>(path, init);
 }
 

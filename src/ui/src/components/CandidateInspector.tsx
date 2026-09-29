@@ -21,9 +21,11 @@ import {
   addCandidateNote,
   patchCandidateStatus,
   getToken,
+  API_V1,
   type CandidateDetail,
   type AuditLogEntry,
 } from "../api/client";
+import { DownloadButton } from "./DownloadButton";
 
 interface Props {
   candidateId: string;
@@ -128,13 +130,21 @@ export function CandidateInspector({ candidateId, onClose }: Props) {
             </>
           ) : null}
         </div>
-        <button
-          onClick={onClose}
-          className="rounded p-1 text-text-secondary hover:bg-background hover:text-text-primary"
-          title="Close inspector"
-        >
-          ✕
-        </button>
+        <div className="flex items-center gap-2">
+          {candidate && (
+            <>
+              <DownloadButton endpoint={`${API_V1}/candidates/${candidateId}/export?format=pdf`} format="pdf" filename="candidate-profile.pdf" label="Profile PDF" size="sm" />
+              <DownloadButton endpoint={`${API_V1}/candidates/${candidateId}/documents.zip`} format="zip" filename="documents.zip" label="Documents" size="sm" />
+            </>
+          )}
+          <button
+            onClick={onClose}
+            className="rounded p-1 text-text-secondary hover:bg-background hover:text-text-primary"
+            title="Close inspector"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}

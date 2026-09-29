@@ -6,8 +6,9 @@ import {
   useReviewMcqSheet,
   McqSheetStatus,
 } from "../hooks/hooks_mcq";
-import { getToken } from "../api/client";
+import { getToken, API_V1 } from "../api/client";
 import { EmptyState } from "./EmptyState";
+import { DownloadButton } from "./DownloadButton";
 
 const STATUS_COLOR: Record<McqSheetStatus, string> = {
   UPLOADED: "text-text-secondary",
@@ -254,6 +255,13 @@ export function McqScannerPanel() {
 
       {data && (
         <div className="flex flex-col gap-4">
+          {/* Download buttons for results */}
+          {activeExamId && (
+            <div className="flex gap-2">
+              <DownloadButton endpoint={`${API_V1}/mcq/results/${activeExamId}?format=pdf`} format="pdf" filename={`mcq-results-${activeExamId.slice(0, 8)}.pdf`} label="Results PDF" size="sm" />
+              <DownloadButton endpoint={`${API_V1}/mcq/results/${activeExamId}?format=csv`} format="csv" filename={`mcq-results-${activeExamId.slice(0, 8)}.csv`} label="Results CSV" size="sm" />
+            </div>
+          )}
           {/* Pipeline-style live status strip — no dead space */}
           <div className="flex flex-wrap gap-2">
             {(["UPLOADED", "PROCESSING", "PROCESSED", "NEEDS_REVIEW", "CONFIRMED", "REJECTED", "RESCAN_REQUESTED"] as McqSheetStatus[]).map(

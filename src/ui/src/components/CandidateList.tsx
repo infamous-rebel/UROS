@@ -7,7 +7,8 @@
  */
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchCandidateList, getToken, type CandidateListParams } from "../api/client";
+import { fetchCandidateList, getToken, API_V1, type CandidateListParams } from "../api/client";
+import { DownloadButton } from "./DownloadButton";
 
 const STATUSES = [
   "", "INTAKE", "PARSED", "ELIGIBILITY_DONE", "NEEDS_REVIEW", "SCORED",
@@ -102,24 +103,6 @@ export function CandidateList({ onInspect }: Props) {
   // Reset page when filters change
   useEffect(() => { setPage(0); }, [statusFilter, sourceFilter, searchText]);
 
-  function handleExport() {
-    const rows = filtered.filter((c) => selected.has(c.candidate_id));
-    if (rows.length === 0) return;
-    const csv = [
-      "candidate_id,full_name,status,source_platform,job_circular_id,data_confidence,created_at",
-      ...rows.map((c) =>
-        `${c.candidate_id},"${c.full_name}",${c.status},${c.source_platform ?? ""},${c.job_circular_id ?? ""},${c.data_confidence ?? ""},${c.created_at}`
-      ),
-    ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `candidates-export-${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   return (
     <div className="flex h-full flex-col rounded-lg border border-border-soft bg-surface">
       {/* Filters bar */}
@@ -157,12 +140,19 @@ export function CandidateList({ onInspect }: Props) {
         />
 
         {selected.size > 0 && (
-          <button
-            onClick={handleExport}
-            className="ml-auto rounded bg-agent px-3 py-1 text-xs text-white hover:bg-agent/80"
-          >
-            Export {selected.size} selected
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs text-text-secondary">{selected.size} selected</span>
+            <DownloadButton
+              endpoint={`${API_V1}/candidates/export-bulk`}
+              method="POST"
+              body={{ candidate_ids: Array.from(selected), format: "csv" }}
+              format="csv"
+              filename="candidates-export.csv"
+              label="Export CSV"
+              size="sm"
+              variant="primary"
+            />
+          </div>
         )}
       </div>
 

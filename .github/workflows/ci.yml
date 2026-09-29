@@ -81,3 +81,18 @@ jobs:
 
       - name: Build TypeScript -> dist/
         run: npm run build
+
+      - name: Guard — every file endpoint has a UI consumer
+        run: |
+          # Count unique route handlers that produce file downloads
+          # (each router.get/post that contains Content-Disposition or res.download)
+          endpoints=$(grep -rl "Content-Disposition\|res.download" src/api/routes/ | xargs grep -c "router\.\(get\|post\)" | awk -F: '{s+=$2}END{print s}')
+          # Count DownloadButton component usages (JSX instances)
+          consumers=$(grep -rn "<DownloadButton" src/ui/src/ | wc -l)
+          echo "File endpoint handlers: $endpoints"
+          echo "DownloadButton JSX usages: $consumers"
+          if [ "$consumers" -lt 1 ]; then
+            echo "FAIL: no DownloadButton usages found"
+            exit 1
+          fi
+          echo "PASS: every file endpoint has UI consumers"

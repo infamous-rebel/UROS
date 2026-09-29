@@ -4,6 +4,8 @@ import { authenticate } from "../middleware/auth";
 import { rbac } from "../middleware/rbac";
 import { validate } from "../middleware/validate";
 import { fetchAuditTrail, checkAuditConsistency } from "../../agents/audit_agent";
+import { db } from "../../database/client";
+import { logAudit } from "../../utils/audit_helper";
 
 const router = Router();
 
@@ -61,6 +63,59 @@ router.get(
     } catch (err) {
       next(err);
     }
+  }
+);
+
+// ─── Quest 05 Part 8: Audit Log Export ──────────────────────────────
+
+/**
+ * GET /api/v1/audit-logs/export
+ * Export audit log entries as CSV or JSON. Admin/Auditor only.
+ */
+router.get(
+  "/export",
+  authenticate,
+  rbac("ADMIN", "AUDITOR"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const format = (req.query.format as string) ?? "csv";
+      const from = req.query.from as string;
+      const to = req.query.to as string;
+
+      let query = `SELECT * FROM audit_log WHERE org_id = $1`;
+      const params: unknown[] = [req.user!.org_id];
+      if (from) { params.push(from); query += ` AND "timestamp" >= $${params.length}`; }
+      if (to) { params.push(to); query += ` AND "timestamp" <= $${params.length}`; }
+      query += ` ORDER BY "timestamp" DESC LIMIT 10000`;
+
+      const logs = await db.query(query, params);
+
+      await logAudit({
+        org_id: req.user!.org_id,
+        entity_type: "AUDIT_LOG",
+        entity_id: "export",
+        agent_or_user: req.user!.user_id,
+        action: "FILE_DOWNLOADED",
+        output_value: { format, resource: "audit_export", count: logs.rowCount },
+      });
+
+      const filename = `audit-log-export.${format}`;
+
+      if (format === "csv") {
+        const header = "audit_id,entity_type,entity_id,agent_or_user,action,reason_code,reason_comment,timestamp";
+        const rows = logs.rows.map((l: any) =>
+          `${l.audit_id},${l.entity_type ?? ""},${l.entity_id ?? ""},${l.agent_or_user ?? ""},${l.action ?? ""},${l.reason_code ?? ""},"${(l.reason_comment ?? "").replace(/"/g, '""')}","${l.timestamp ?? ""}"`
+        );
+        const csv = [header, ...rows].join("\n");
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+        res.send(csv);
+      } else {
+        res.setHeader("Content-Type", "application/json");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+        res.json({ entries: logs.rows, count: logs.rowCount });
+      }
+    } catch (err) { next(err); }
   }
 );
 

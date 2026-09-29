@@ -12,6 +12,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { API_V1, authedRequest } from "../api/client";
+import { DownloadButton } from "./DownloadButton";
 
 type SettingsTab = "profile" | "organization" | "users" | "credentials" | "fallback" |
   "integrations" | "personas" | "kpi" | "onboarding" | "backup" | "audit" | "export";
@@ -692,7 +693,7 @@ function BackupTab() {
                 <td className="py-2 text-xs text-text-secondary">{(b.size / 1024).toFixed(1)} KB</td>
                 <td className="py-2 text-xs text-text-secondary">{new Date(b.created_at).toLocaleString()}</td>
                 <td className="py-2 text-right">
-                  <a href={`${API_V1}/settings/backup/download/${b.filename}`} className="text-xs text-agent hover:underline" target="_blank">Download</a>
+                  <DownloadButton endpoint={`${API_V1}/settings/backup/download/${b.filename}`} format="tar" filename={b.filename} label="Download" size="sm" />
                 </td>
               </tr>
             ))}
@@ -739,6 +740,11 @@ function AuditTab() {
   return (
     <div>
       <SectionTitle title="Audit & Retention" description="Configure audit log retention and export trails" />
+
+      <div className="mb-4 flex gap-2">
+        <DownloadButton endpoint={`${API_V1}/audit-logs/export?format=csv`} format="csv" filename="audit-log.csv" label="Export CSV" size="sm" />
+        <DownloadButton endpoint={`${API_V1}/audit-logs/export?format=json`} format="json" filename="audit-log.json" label="Export JSON" size="sm" />
+      </div>
       <Field label="Retention (days)">
         <input type="number" value={days} onChange={(e) => setDays(Number(e.target.value))} className={inputClass} min={7} max={3650} />
       </Field>
@@ -809,7 +815,7 @@ function ExportTab() {
             </span>
           </div>
           {exportJob.status === "READY" && (
-            <button className="mt-3 rounded-md bg-agent px-4 py-1.5 text-xs font-semibold text-white">Download ZIP</button>
+            <DownloadButton endpoint={`${API_V1}/settings/data-export/download/${exportJob.id}`} format="json" filename="data-export.json" label="Download Export" size="sm" variant="primary" />
           )}
         </div>
       )}

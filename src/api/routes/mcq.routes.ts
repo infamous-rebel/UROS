@@ -1,6 +1,8 @@
 import { Router, Request, Response, NextFunction } from "express";
 import multer from "multer";
 import { z } from "zod";
+import path from "path";
+import fs from "fs";
 import { authenticate } from "../middleware/auth";
 import { rbac } from "../middleware/rbac";
 import { validate } from "../middleware/validate";
@@ -519,6 +521,52 @@ router.patch(
     } catch (err) {
       next(err);
     }
+  }
+);
+
+// ─── Quest 05 Part 8: MCQ Sheet Image Download ──────────────────────
+
+/**
+ * GET /api/v1/mcq/sheets/:sheet_id/image
+ * Serve the original scanned image file for a given MCQ answer sheet.
+ */
+router.get(
+  "/sheets/:sheet_id/image",
+  authenticate,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { sheet_id } = req.params;
+
+      const sheetRes = await db.query(
+        `SELECT s.file_path, s.file_name FROM mcq_answer_sheets s
+         JOIN mcq_exams e ON e.exam_id = s.exam_id
+         WHERE s.sheet_id=$1 AND e.org_id=$2`,
+        [sheet_id, req.user!.org_id]
+      );
+      if (sheetRes.rowCount === 0) {
+        res.status(404).json({ error: "Sheet not found" });
+        return;
+      }
+
+      const { file_path, file_name } = sheetRes.rows[0];
+      if (!file_path || !fs.existsSync(file_path)) {
+        res.status(404).json({ error: "Image file not found on disk" });
+        return;
+      }
+
+      await logAudit({
+        org_id: req.user!.org_id,
+        entity_type: "MCQ_SHEET",
+        entity_id: sheet_id,
+        agent_or_user: req.user!.user_id,
+        action: "FILE_DOWNLOADED",
+        output_value: { format: "image", resource: "mcq_sheet_image", filename: file_name ?? path.basename(file_path) },
+      });
+
+      res.setHeader("Content-Type", "image/jpeg");
+      res.setHeader("Content-Disposition", `inline; filename="${file_name ?? path.basename(file_path)}"`);
+      fs.createReadStream(file_path).pipe(res);
+    } catch (err) { next(err); }
   }
 );
 

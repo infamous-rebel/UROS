@@ -6,6 +6,7 @@
  */
 import { useState, useRef, useCallback } from "react";
 import { getToken, API_V1 } from "../api/client";
+import { DownloadButton } from "./DownloadButton";
 
 interface ImportResult {
   batch_id: string;
@@ -172,6 +173,10 @@ export function CandidateIntakePanel() {
       ) : (
         /* ─── CSV Import ─────────────────────────────────────── */
         <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-text-secondary">Need a template?</span>
+            <DownloadButton endpoint={`${API_V1}/templates/candidates.csv`} format="csv" filename="candidates-template.csv" label="Download CSV Template" size="sm" />
+          </div>
           {/* File picker */}
           <div
             onDrop={handleDrop}

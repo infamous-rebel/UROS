@@ -436,4 +436,142 @@ router.post(
   }
 );
 
+// ─── Quest 05 Part 8: Candidate Export Endpoints ────────────────────
+
+/**
+ * GET /api/v1/candidates/:id/export
+ * Export a single candidate profile as PDF (placeholder) or CSV.
+ */
+router.get(
+  "/:id/export",
+  authenticate,
+  rbac("ADMIN", "SENIOR_RECRUITER", "RECRUITER", "AUDITOR"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const format = (req.query.format as string) ?? "pdf";
+      const candidate = await db.query(
+        `SELECT * FROM candidates WHERE candidate_id = $1 AND org_id = $2`,
+        [req.params.id, req.user!.org_id]
+      );
+      if (candidate.rowCount === 0) {
+        res.status(404).json({ error: "Candidate not found" });
+        return;
+      }
+
+      const c = candidate.rows[0];
+      const filename = `candidate-${c.full_name?.replace(/\s+/g, "-") ?? c.candidate_id}.${format}`;
+
+      await logAudit({
+        org_id: req.user!.org_id,
+        entity_type: "CANDIDATE",
+        entity_id: req.params.id,
+        agent_or_user: req.user!.user_id,
+        action: "FILE_DOWNLOADED",
+        output_value: { format, resource: "candidate_profile", filename },
+      });
+
+      if (format === "csv") {
+        const csv = `candidate_id,full_name,email,status,source_platform,created_at\n${c.candidate_id},${c.full_name ?? ""},${c.email ?? ""},${c.status ?? ""},${c.source_platform ?? ""},${c.created_at ?? ""}`;
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+        res.send(csv);
+      } else {
+        const content = `%PDF-1.4\n% Candidate Profile: ${c.full_name ?? "Unknown"}\n% ID: ${c.candidate_id}\n% Status: ${c.status ?? "N/A"}\n% Source: ${c.source_platform ?? "N/A"}\n% Generated: ${new Date().toISOString()}\n`;
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+        res.send(content);
+      }
+    } catch (err) { next(err); }
+  }
+);
+
+/**
+ * GET /api/v1/candidates/:id/documents.zip
+ * ZIP of all uploaded documents for a candidate.
+ */
+router.get(
+  "/:id/documents.zip",
+  authenticate,
+  rbac("ADMIN", "SENIOR_RECRUITER", "RECRUITER"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const candidate = await db.query(
+        `SELECT full_name FROM candidates WHERE candidate_id = $1 AND org_id = $2`,
+        [req.params.id, req.user!.org_id]
+      );
+      if (candidate.rowCount === 0) {
+        res.status(404).json({ error: "Candidate not found" });
+        return;
+      }
+
+      const name = candidate.rows[0].full_name?.replace(/\s+/g, "-") ?? req.params.id;
+      const filename = `${name}-documents.zip`;
+
+      await logAudit({
+        org_id: req.user!.org_id,
+        entity_type: "CANDIDATE",
+        entity_id: req.params.id,
+        agent_or_user: req.user!.user_id,
+        action: "FILE_DOWNLOADED",
+        output_value: { format: "zip", resource: "candidate_documents", filename },
+      });
+
+      // Placeholder ZIP (empty ZIP structure)
+      const zipBuffer = Buffer.from("PK\x05\x06" + "\x00".repeat(18));
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(zipBuffer);
+    } catch (err) { next(err); }
+  }
+);
+
+/**
+ * POST /api/v1/candidates/export-bulk
+ * Bulk export of multiple candidates as CSV or JSON.
+ */
+router.post(
+  "/export-bulk",
+  authenticate,
+  rbac("ADMIN", "SENIOR_RECRUITER", "RECRUITER"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { candidate_ids, format = "csv" } = req.body as { candidate_ids: string[]; format?: string };
+      if (!candidate_ids?.length) {
+        res.status(400).json({ error: "No candidate IDs provided" });
+        return;
+      }
+
+      const candidates = await db.query(
+        `SELECT candidate_id, full_name, email, status, source_platform, created_at
+         FROM candidates WHERE candidate_id = ANY($1) AND org_id = $2`,
+        [candidate_ids, req.user!.org_id]
+      );
+
+      await logAudit({
+        org_id: req.user!.org_id,
+        entity_type: "CANDIDATE",
+        entity_id: `bulk-${candidate_ids.length}`,
+        agent_or_user: req.user!.user_id,
+        action: "FILE_DOWNLOADED",
+        output_value: { format, resource: "bulk_candidate_export", count: candidates.rowCount },
+      });
+
+      if (format === "csv") {
+        const header = "candidate_id,full_name,email,status,source_platform,created_at";
+        const rows = candidates.rows.map((c) =>
+          `${c.candidate_id},"${c.full_name ?? ""}","${c.email ?? ""}",${c.status ?? ""},${c.source_platform ?? ""},${c.created_at ?? ""}`
+        );
+        const csv = [header, ...rows].join("\n");
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", `attachment; filename="candidates-export.csv"`);
+        res.send(csv);
+      } else {
+        res.setHeader("Content-Type", "application/json");
+        res.setHeader("Content-Disposition", `attachment; filename="candidates-export.json"`);
+        res.json({ candidates: candidates.rows, count: candidates.rowCount });
+      }
+    } catch (err) { next(err); }
+  }
+);
+
 export default router;

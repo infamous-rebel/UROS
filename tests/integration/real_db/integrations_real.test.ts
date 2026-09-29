@@ -382,8 +382,8 @@ describe("Quest 04 — Integrations (real DB)", () => {
     await expect(fetchBatch(res.body.batch_id, ORG_B)).rejects.toThrow(/Import batch not found/);
   });
 
-  it("migrations ledger records every applied file (34 files)", async () => {
+  it("migrations ledger records every applied file (35 files)", async () => {
     const res = await pool.query(`SELECT count(*)::int AS n FROM schema_migrations`);
-    expect(res.rows[0].n).toBe(34);
+    expect(res.rows[0].n).toBe(35);
   });
 });
