@@ -224,6 +224,12 @@ There is a distinction worth writing into the master explicitly:
 
 These are not the same thing, and the guardrails above make the difference structural rather than aspirational.
 
+### Rule 19 — Checkpoint commit policy (power-failure lesson)
+
+After every Part of a Quest, commit to main with message `Quest NN Part X — <description> [WIP]` before starting the next Part. Do not batch all Parts into one commit at Quest close-out. Tag only at Quest close-out, not per Part.
+
+This ensures that if a session crashes mid-Quest, all completed Parts are recoverable from git history. Each Part is independently deployable and reversible. Never rewrite history (no `--amend` across Parts, no `rebase -i` to squash Parts together).
+
 
 ---
 

@@ -69,6 +69,7 @@ function token(userId: string, orgId: string, role: string): string {
 async function createTestDatabase(): Promise<void> {
   const adminPool = new Pool({ connectionString: BASE_URL });
   try {
+    await adminPool.query(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${REAL_DB}' AND pid <> pg_backend_pid()`);
     await adminPool.query(`DROP DATABASE IF EXISTS ${REAL_DB}`);
     await adminPool.query(`CREATE DATABASE ${REAL_DB}`);
   } finally {
@@ -119,6 +120,7 @@ describe("Quest 04 — Integrations (real DB)", () => {
     await pool.end();
     const adminPool = new Pool({ connectionString: BASE_URL });
     try {
+      await adminPool.query(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${REAL_DB}' AND pid <> pg_backend_pid()`);
       await adminPool.query(`DROP DATABASE IF EXISTS ${REAL_DB}`);
     } finally {
       await adminPool.end();
@@ -380,8 +382,8 @@ describe("Quest 04 — Integrations (real DB)", () => {
     await expect(fetchBatch(res.body.batch_id, ORG_B)).rejects.toThrow(/Import batch not found/);
   });
 
-  it("migrations ledger records every applied file (32 files)", async () => {
+  it("migrations ledger records every applied file (34 files)", async () => {
     const res = await pool.query(`SELECT count(*)::int AS n FROM schema_migrations`);
-    expect(res.rows[0].n).toBe(32);
+    expect(res.rows[0].n).toBe(34);
   });
 });

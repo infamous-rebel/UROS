@@ -1,6 +1,7 @@
 import express, { Express } from "express";
 import helmet from "helmet";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import { env } from "../config/env.schema";
 import { logger } from "../utils/logger";
 import { requestId } from "./middleware/request_id";
@@ -42,6 +43,10 @@ import referenceRoutes from "./routes/reference.routes";
 import analyticsRoutes from "./routes/analytics.routes";
 import offboardingRoutes from "./routes/offboarding.routes";
 import rediscoveryRoutes from "./routes/rediscovery.routes";
+import authRoutes from "./routes/auth.routes";
+import dashboardRoutes from "./routes/dashboard.routes";
+import notificationsRoutes from "./routes/notifications.routes";
+import searchRoutes from "./routes/search.routes";
 
 /**
  * Global, generous defense-in-depth rate limit applied to every request
@@ -83,8 +88,10 @@ export function createApp(): Express {
   app.use(helmet());
   app.use(
     cors(
+      // credentials: true — the refresh cookie rides on every auth call,
+      // and the dashboard (a different port in dev) needs it included.
       env.CORS_ALLOWED_ORIGINS
-        ? { origin: env.CORS_ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean) }
+        ? { origin: env.CORS_ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean), credentials: true }
         : undefined
     )
   );
@@ -112,6 +119,9 @@ export function createApp(): Express {
   app.use("/api/v1/webhooks", webhooksRoutes);
 
   app.use(express.json({ limit: "5mb" }));
+  // Quest 05 Part 1: refresh tokens ride an httpOnly cookie scoped to
+  // /api/v1/auth — cookie parsing is required to read/rotate it.
+  app.use(cookieParser());
 
   const v1 = express.Router();
   v1.use("/applications", applicationsRoutes);
@@ -157,8 +167,16 @@ export function createApp(): Express {
   v1.use("/i18n", i18nRoutes);
   v1.use("/users", usersRoutes);
   v1.use("/organizations", organizationsRoutes);
+  // Quest 05 Part 1: authentication & session. /auth routes are public
+  // (login/refresh/reset) or session-bound via authenticate internally —
+  // see auth.routes.ts header.
+  v1.use("/auth", authRoutes);
   // Quest 04: provider registry, fallback chains, resilience status, live tests.
   v1.use("/integrations", integrationsRoutes);
+  // Quest 05 Part 2: CommandBar — dashboard summary, circulars, notifications, global search.
+  v1.use("/dashboard", dashboardRoutes);
+  v1.use("/notifications", notificationsRoutes);
+  v1.use("/search", searchRoutes);
 
   app.use("/api/v1", v1);
 

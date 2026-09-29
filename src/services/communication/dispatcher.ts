@@ -144,7 +144,7 @@ async function sendViaRegistry(
 async function sendViaLegacy(
   orgId: string,
   connectorName: string,
-  input: { candidate_id: string; to: string; message: string },
+  input: { candidate_id: string | null; to: string; message: string },
   meta: DispatchMeta
 ): Promise<AttemptOutcome> {
   let cred: { apiKey: string; baseUrl: string | null };
@@ -217,7 +217,7 @@ async function sendViaLegacy(
 export async function dispatchMessage(
   orgId: string,
   messageType: MessageType,
-  input: { candidate_id: string; to: string; message: string },
+  input: { candidate_id: string | null; to: string; message: string },
   meta: DispatchMeta
 ): Promise<DispatchOutcome> {
   const configured = await resolveFallbackChain(orgId, messageType);
@@ -250,7 +250,7 @@ export async function dispatchMessage(
       await logAudit({
         org_id: orgId,
         entity_type: "COMMUNICATION",
-        entity_id: input.candidate_id,
+        entity_id: input.candidate_id ?? orgId,
         agent_or_user: meta.actor,
         action: "MESSAGE_DISPATCHED",
         reason_code: "DISPATCH_SUCCESS",
@@ -288,7 +288,7 @@ export async function dispatchMessage(
   await logAudit({
     org_id: orgId,
     entity_type: "COMMUNICATION",
-    entity_id: input.candidate_id,
+    entity_id: input.candidate_id ?? orgId,
     agent_or_user: meta.actor,
     action: "MESSAGE_DISPATCH_FAILED",
     reason_code: lastOutcome.error_code ?? "DISPATCH_FAILED",

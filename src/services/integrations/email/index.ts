@@ -45,7 +45,8 @@ export async function fetchUnreadApplicationEmails(
 }
 
 export interface OutboundEmailRecipient {
-  candidate_id: string;
+  /** Null for user-directed sends (e.g. auth password-reset links). */
+  candidate_id: string | null;
   to: string;
   subject: string;
   body_text: string;
@@ -53,7 +54,7 @@ export interface OutboundEmailRecipient {
 }
 
 export interface OutboundEmailResult {
-  candidate_id: string;
+  candidate_id: string | null;
   status: "SENT" | "FAILED";
   last_error?: string;
 }
@@ -104,7 +105,7 @@ export async function sendOutboundEmail(orgId: string, recipient: OutboundEmailR
     await logAudit({
       org_id: orgId,
       entity_type: "COMMUNICATION",
-      entity_id: recipient.candidate_id,
+      entity_id: recipient.candidate_id ?? orgId,
       agent_or_user: "EmailConnector",
       action: "EMAIL_SEND_FAILED",
       output_value: { template_code: recipient.template_code },

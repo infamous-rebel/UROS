@@ -21,7 +21,8 @@ export type CommunicationTemplateCode =
   | "INTERVIEW_SCHEDULE"
   | "FINAL_SELECTION"
   | "APPLICANT_PORTAL_OTP"
-  | "REDISCOVERY_INVITE";
+  | "REDISCOVERY_INVITE"
+  | "PASSWORD_RESET_LINK";
 
 export type TemplateParams = Record<string, string | number>;
 
@@ -53,6 +54,10 @@ const BODIES: Record<CommunicationTemplateCode, Record<SupportedLanguage, string
   REDISCOVERY_INVITE: {
     en: "Dear {{candidate_name}}, you previously applied for {{position}} at {{org_name}}. A matching new opening is available and we would like to invite you to re-apply. Reference: {{candidate_id}}.",
     bn: "প্রিয় {{candidate_name}}, {{org_name}}-এ {{position}} পদের জন্য আপনি পূর্বে আবেদন করেছিলেন। একটি সমতুল্য নতুন পদ খোলা হয়েছে — আবেদন করতে আমরা আপনাকে আমন্ত্রণ জানাচ্ছি। রেফারেন্স: {{candidate_id}}।",
+  },
+  PASSWORD_RESET_LINK: {
+    en: "UROS password reset: open {{reset_link}} within 30 minutes to set your new password. If you did not request this, ignore this message.",
+    bn: "UROS পাসওয়ার্ড রিসেট: নতুন পাসওয়ার্ড সেট করতে ৩০ মিনিটের মধ্যে {{reset_link}} খুলুন। আপনি অনুরোধ করেননি হলে এই বার্তা উপেক্ষা করুন।",
   },
 };
 

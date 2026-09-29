@@ -16,6 +16,7 @@ const EXPECTED_CODES: CommunicationTemplateCode[] = [
   "FINAL_SELECTION",
   "APPLICANT_PORTAL_OTP",
   "REDISCOVERY_INVITE",
+  "PASSWORD_RESET_LINK",
 ];
 
 const PARAMS = {

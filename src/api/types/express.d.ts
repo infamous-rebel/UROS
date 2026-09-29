@@ -4,6 +4,8 @@ export interface AuthenticatedUser {
   user_id: string;
   org_id: string;
   role: UserRole;
+  /** Present only on session-bound tokens (human login). Absent on service tokens. */
+  session_id?: string;
 }
 
 declare global {

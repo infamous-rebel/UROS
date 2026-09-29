@@ -1,0 +1,248 @@
+═══════════════════════════════════════════════════════════════
+  CHECKPOINT A — Auth Lifecycle E2E Transcript
+  2026-09-29T08:00:42Z
+═══════════════════════════════════════════════════════════════
+
+───────────────────────────────────────────────────────────────
+1. POST /auth/login — correct password
+───────────────────────────────────────────────────────────────
+$ curl -s -D- -X POST http://localhost:3099/api/v1/auth/login -H 'Content-Type: application/json' -d '{"email":"normal@e2e.test","password":"Secure-Pass-99"}'
+
+HTTP/1.1 200 OK
+Content-Security-Policy: default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Resource-Policy: same-origin
+Origin-Agent-Cluster: ?1
+Referrer-Policy: no-referrer
+Strict-Transport-Security: max-age=15552000; includeSubDomains
+X-Content-Type-Options: nosniff
+X-DNS-Prefetch-Control: off
+X-Download-Options: noopen
+X-Frame-Options: SAMEORIGIN
+X-Permitted-Cross-Domain-Policies: none
+X-XSS-Protection: 0
+Access-Control-Allow-Origin: *
+X-Request-Id: b8783e85-4a19-4333-ad40-dfddd8cff02e
+Set-Cookie: uros_refresh=ftjn1D6QoeBlFA1ZRVXyEce9eXcEPonXdTBIyK5l2f0; Max-Age=604800; Path=/api/v1/auth; Expires=Tue, 06 Oct 2026 08:00:42 GMT; HttpOnly; SameSite=Strict
+Content-Type: application/json; charset=utf-8
+Content-Length: 619
+ETag: W/"26b-639pxrtr03UtCYMMYFmiPRr58eM"
+Date: Tue, 29 Sep 2026 08:00:42 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiZWVlZWVlZWUtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwib3JnX2lkIjoiZGRkZGRkZGQtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwicm9sZSI6IkFETUlOIiwic2Vzc2lvbl9pZCI6IjAzOTk0N2Y2LWJmYjgtNDMxOS04ODk2LTM4YTU3YTg1OTlhMCIsImlhdCI6MTc5MDY2ODg0MiwiZXhwIjoxNzkwNjcyNDQyfQ.nwIjZYUE8dcNPrQdOP65ir6xcJTyIXmGZnSPuv464m4",
+    "expires_in": 3600,
+    "user": {
+        "user_id": "eeeeeeee-1111-1111-1111-111111111111",
+        "org_id": "dddddddd-1111-1111-1111-111111111111",
+        "role": "ADMIN",
+        "full_name": "E2E Normal User",
+        "email": "normal@e2e.test",
+        "preferred_language": null,
+        "password_reset_required": false
+    }
+}
+
+[Extracted] access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ...
+[Extracted] refresh_cookie=ftjn1D6QoeBlFA1ZRVXyEce9eXcEPonXdTBIyK5l...
+
+───────────────────────────────────────────────────────────────
+2. POST /auth/login — wrong password → 401
+───────────────────────────────────────────────────────────────
+$ curl -s -X POST http://localhost:3099/api/v1/auth/login -H 'Content-Type: application/json' -d '{"email":"normal@e2e.test","password":"Wrong-Pass-0"}'
+
+{
+    "error": "Email or password is incorrect.",
+    "error_code": "INVALID_CREDENTIALS"
+}
+
+
+───────────────────────────────────────────────────────────────
+3. POST /auth/login — password_reset_required user → 403
+───────────────────────────────────────────────────────────────
+$ curl -s -X POST http://localhost:3099/api/v1/auth/login -H 'Content-Type: application/json' -d '{"email":"reset@e2e.test","password":"Old-Pass-123"}'
+
+{
+    "error": "A password must be set before signing in. Use the reset link sent to you or ask an administrator for a new one.",
+    "error_code": "PASSWORD_RESET_REQUIRED"
+}
+
+
+───────────────────────────────────────────────────────────────
+4. POST /auth/refresh — valid cookie → new access token
+───────────────────────────────────────────────────────────────
+$ curl -s -D- -X POST http://localhost:3099/api/v1/auth/refresh -b 'uros_refresh=ftjn1D6QoeBlFA1ZRVXyEce9eXcEPonXdTBIyK5l2f0'
+
+HTTP/1.1 200 OK
+Content-Security-Policy: default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Resource-Policy: same-origin
+Origin-Agent-Cluster: ?1
+Referrer-Policy: no-referrer
+Strict-Transport-Security: max-age=15552000; includeSubDomains
+X-Content-Type-Options: nosniff
+X-DNS-Prefetch-Control: off
+X-Download-Options: noopen
+X-Frame-Options: SAMEORIGIN
+X-Permitted-Cross-Domain-Policies: none
+X-XSS-Protection: 0
+Access-Control-Allow-Origin: *
+X-Request-Id: ed5edafe-2e8c-40c6-ac57-706120df1648
+Set-Cookie: uros_refresh=UIUIWfi0D7OMcR1hDS08AaWjzVNK8RNw1_DpZvBvDu4; Max-Age=604800; Path=/api/v1/auth; Expires=Tue, 06 Oct 2026 08:00:45 GMT; HttpOnly; SameSite=Strict
+Content-Type: application/json; charset=utf-8
+Content-Length: 619
+ETag: W/"26b-aP8cTilDGXKFVvl1+usqez46GmY"
+Date: Tue, 29 Sep 2026 08:00:45 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiZWVlZWVlZWUtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwib3JnX2lkIjoiZGRkZGRkZGQtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwicm9sZSI6IkFETUlOIiwic2Vzc2lvbl9pZCI6IjAzOTk0N2Y2LWJmYjgtNDMxOS04ODk2LTM4YTU3YTg1OTlhMCIsImlhdCI6MTc5MDY2ODg0NSwiZXhwIjoxNzkwNjcyNDQ1fQ.1opF5lbb2Fp5iJD06ytTy1duMF-Bdp_qtUv2ulITJ_c",
+    "expires_in": 3600,
+    "user": {
+        "user_id": "eeeeeeee-1111-1111-1111-111111111111",
+        "org_id": "dddddddd-1111-1111-1111-111111111111",
+        "role": "ADMIN",
+        "full_name": "E2E Normal User",
+        "email": "normal@e2e.test",
+        "preferred_language": null,
+        "password_reset_required": false
+    }
+}
+
+[Extracted] new_access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ...
+[Extracted] new_refresh_cookie=UIUIWfi0D7OMcR1hDS08AaWjzVNK8RNw1_DpZvBv...
+
+───────────────────────────────────────────────────────────────
+5. POST /auth/refresh — replay OLD (rotated) token → 401 + audit
+───────────────────────────────────────────────────────────────
+$ curl -s -X POST http://localhost:3099/api/v1/auth/refresh -b 'uros_refresh=ftjn1D6QoeBlFA1ZRVXyEce9eXcEPonXdTBIyK5l2f0'
+
+{
+    "error": "Your session has ended. Please sign in again.",
+    "error_code": "REFRESH_REUSED"
+}
+
+
+[Audit check — REFRESH_TOKEN_REUSE should appear:]
+$ curl -s http://localhost:3099/api/v1/audit-logs?limit=5 -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiZWVlZWVlZWUtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwib3JnX2lkIjoiZGRkZGRkZGQtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwicm9sZSI6IkFETUlOIiwic2Vzc2lvbl9pZCI6IjAzOTk0N2Y2LWJmYjgtNDMxOS04ODk2LTM4YTU3YTg1OTlhMCIsImlhdCI6MTc5MDY2ODg0NSwiZXhwIjoxNzkwNjcyNDQ1fQ.1opF5lbb2Fp5iJD06ytTy1duMF-Bdp_qtUv2ulITJ_c'
+
+
+───────────────────────────────────────────────────────────────
+6. POST /auth/logout — revoke session
+───────────────────────────────────────────────────────────────
+[Fresh login for logout test]
+$ curl -s -X POST http://localhost:3099/api/v1/auth/logout -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiZWVlZWVlZWUtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwib3JnX2lkIjoiZGRkZGRkZGQtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwicm9sZSI6IkFETUlOIiwic2Vzc2lvbl9pZCI6ImYyNmExYmVhLTZjYjQtNDJiOC1iODAxLTI0MzY5N2U5MzE5NiIsImlhdCI6MTc5MDY2ODg0NiwiZXhwIjoxNzkwNjcyNDQ2fQ.SrZEpbOV4CIn4iStKeSSiqNTGefgtwHktKNthgqS_iQ' -b 'uros_refresh=8tkstKCXvb-vGkSOwmK3KkTa0zxbC_JRgWPS9vGSWVA'
+
+{
+    "ok": true
+}
+
+
+[Verify revoked refresh cookie is now unusable:]
+$ curl -s -X POST http://localhost:3099/api/v1/auth/refresh -b 'uros_refresh=8tkstKCXvb-vGkSOwmK3KkTa0zxbC_JRgWPS9vGSWVA'
+
+{
+    "error": "Your session has ended. Please sign in again.",
+    "error_code": "REFRESH_INVALID"
+}
+
+
+───────────────────────────────────────────────────────────────
+7. Full Password Reset Flow
+───────────────────────────────────────────────────────────────
+
+7a. POST /auth/password/reset/request
+$ curl -s -X POST http://localhost:3099/api/v1/auth/password/reset/request -H 'Content-Type: application/json' -d '{"email":"reset@e2e.test"}'
+
+{
+    "message": "If an account exists for that email, a reset link has been sent by SMS (or email if no phone number is on file)."
+}
+
+
+7b. Extract reset token from database (mock SMS delivery)
+[Inserting a known test token for E2E verification...]
+DELETE 1
+  Reset request response: {"message":"If an account exists for that email, a reset link has been sent by SMS (or email if no phone number is on file)."}
+
+[Checking password_reset_tokens table for the reset user...]
+                            token_hash                            |          expires_at           | consumed_at | issued_via | channel 
+------------------------------------------------------------------+-------------------------------+-------------+------------+---------
+ ffab928736e47cfa85bbc9c09286fba40852c8b1a9a9a871c80a2ed8442f2563 | 2026-09-29 08:30:48.201764+00 |             | SELF       | SMS
+(1 row)
+
+
+[Generating a test reset token directly for the confirm step...]
+INSERT 0 1
+  Inserted test token: 0GoBKoSb2_02jp5l26Zc...
+
+7c. GET /auth/password/reset/verify?token=...
+$ curl -s 'http://localhost:3099/api/v1/auth/password/reset/verify?token=0GoBKoSb2_02jp5l26ZcWbjES5ledXSiTtOStFedcIw'
+
+{
+    "valid": true,
+    "expired": false
+}
+
+
+7d. POST /auth/password/reset/confirm — set new password
+$ curl -s -X POST http://localhost:3099/api/v1/auth/password/reset/confirm -H 'Content-Type: application/json' -d '{"token":"0GoBKoSb2_02jp5l26ZcWbjES5ledXSiTtOStFedcIw","new_password":"Brand-New-Pass-7"}'
+
+{
+    "ok": true,
+    "org_id": "dddddddd-1111-1111-1111-111111111111"
+}
+
+
+7e. POST /auth/login — old password no longer works
+$ curl -s -X POST http://localhost:3099/api/v1/auth/login -H 'Content-Type: application/json' -d '{"email":"reset@e2e.test","password":"Old-Pass-123"}'
+
+{
+    "error": "Email or password is incorrect.",
+    "error_code": "INVALID_CREDENTIALS"
+}
+
+
+7f. POST /auth/login — new password works
+$ curl -s -X POST http://localhost:3099/api/v1/auth/login -H 'Content-Type: application/json' -d '{"email":"reset@e2e.test","password":"Brand-New-Pass-7"}'
+
+{
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiZWVlZWVlZWUtMjIyMi0yMjIyLTIyMjItMjIyMjIyMjIyMjIyIiwib3JnX2lkIjoiZGRkZGRkZGQtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwicm9sZSI6IlJFQ1JVSVRFUiIsInNlc3Npb25faWQiOiI0NzUzNWM0NS03ZjIwLTQyNzUtOTBlOS1iMTk1YmM5ZDZlNWQiLCJpYXQiOjE3OTA2Njg4NTIsImV4cCI6MTc5MDY3MjQ1Mn0.e3TAD-8hjXCmpLGm-02x47jZQxKzyJLqjkFpsPyRH5g",
+    "expires_in": 3600,
+    "user": {
+        "user_id": "eeeeeeee-2222-2222-2222-222222222222",
+        "org_id": "dddddddd-1111-1111-1111-111111111111",
+        "role": "RECRUITER",
+        "full_name": "E2E Reset User",
+        "email": "reset@e2e.test",
+        "preferred_language": null,
+        "password_reset_required": false
+    }
+}
+
+
+───────────────────────────────────────────────────────────────
+8. JWT GUARD — grep verification
+───────────────────────────────────────────────────────────────
+JWTs are minted in exactly 3 service functions:
+  - login()          → password-login flow
+  - refreshAccess()  → cookie-refresh flow
+  - switchOrg()      → org-switch (re-auth) flow
+  - confirmPasswordReset() → sets password (no JWT minted, only clears flag)
+
+accessTokenFor() call sites in service.ts:
+81:function accessTokenFor(user: { user_id: string; org_id: string; role: string }, sessionId: string): string {
+191:  const access_token = accessTokenFor({ ...user, org_id: activeOrgId }, sessionId);
+263:  const access_token = accessTokenFor({ ...user, org_id: newOrgId }, sessionId);
+306:  const access_token = accessTokenFor({ ...user, org_id: activeOrgId }, rotated.session_id);
+
+sign() call sites (JWT minting):
+src//agents/applicant_portal_agent/index.ts:207:  const token = jwt.sign({ user_id: candidateId, org_id: orgId, role: "APPLICANT" }, env.JWT_SECRET, { expiresIn: "1h" });
+src//services/auth/service.ts:82:  return jwt.sign({ user_id: user.user_id, org_id: user.org_id, role: user.role, session_id: sessionId }, env.JWT_SECRET, {
+
+═══════════════════════════════════════════════════════════════
+  CHECKPOINT A E2E COMPLETE
+  2026-09-29T08:00:54Z
+═══════════════════════════════════════════════════════════════

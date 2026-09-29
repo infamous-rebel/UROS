@@ -127,3 +127,7 @@ All six tables received:
 **Migrations**: 0001–0029
 
 Initial schema, agents, pipeline, queue, evaluation engine, communication hub, fraud detection, reference checks, offboarding, rediscovery, applicant portal, digital exam, analytics, and CI/CD pipeline. See `progress.md` for the full Trust Ledger.
+
+## Deferred Items — Quest 08
+
+- **Real-DB test parallel isolation**: Real-DB test suites currently require `--maxWorkers=2` to avoid parallel database creation/destruction contention on the shared Postgres instance. Proper fix: per-suite database isolation (create in `beforeAll`, drop in `afterAll` with `pg_terminate_backend`), or migrate to a schema-per-suite approach (`DROP SCHEMA CASCADE`) instead of database-per-suite. Investigate and resolve in Quest 08.

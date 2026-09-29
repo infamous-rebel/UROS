@@ -92,12 +92,29 @@ router.get(
       params.push(limit);
       params.push(offset);
 
+      // For NEEDS_REVIEW candidates, join with evaluation_results to surface
+      // reason codes and evidence snippets for the DecisionQueue (Quest 05 Part 3).
+      const joinEval = status === "NEEDS_REVIEW";
       const result = await db.query(
-        `SELECT candidate_id, full_name, status, source_platform, job_circular_id,
-                position_applied, data_confidence, created_at, updated_at
-         FROM candidates
+        `SELECT c.candidate_id, c.full_name, c.status, c.source_platform, c.job_circular_id,
+                c.position_applied, c.data_confidence, c.created_at, c.updated_at${
+                  joinEval
+                    ? `, e.reason_code, e.confidence AS eval_confidence,
+                       e.distance_to_threshold, e.input_value`
+                    : ""
+                }
+         FROM candidates c${
+           joinEval
+             ? ` LEFT JOIN LATERAL (
+                  SELECT reason_code, confidence, distance_to_threshold, input_value
+                  FROM evaluation_results
+                  WHERE candidate_id = c.candidate_id AND org_id = $1
+                  ORDER BY evaluated_at DESC LIMIT 1
+                ) e ON true`
+             : ""
+         }
          WHERE ${conditions.join(" AND ")}
-         ORDER BY created_at DESC
+         ORDER BY c.created_at DESC
          LIMIT $${params.length - 1} OFFSET $${params.length}`,
         params
       );
@@ -136,18 +153,23 @@ router.get(
         return;
       }
 
-      const [academic, documents, evaluations, scoring] = await Promise.all([
+      const [academic, documents, evaluations, scoring, verifications] = await Promise.all([
         db.query(`SELECT * FROM candidate_academic_records WHERE candidate_id=$1`, [id]),
         db.query(`SELECT * FROM candidate_documents WHERE candidate_id=$1`, [id]),
         db.query(
           `SELECT rule_id, status, reason_code, confidence, distance_to_threshold,
-                  human_decision, evaluated_at
+                  human_decision, evaluated_at, input_value
            FROM evaluation_results WHERE candidate_id=$1 AND org_id=$2 ORDER BY evaluated_at DESC`,
           [id, req.user!.org_id]
         ),
         db.query(
           `SELECT total_score, breakdown, rank, computed_at
            FROM scoring_results WHERE candidate_id=$1 AND org_id=$2 ORDER BY computed_at DESC LIMIT 1`,
+          [id, req.user!.org_id]
+        ),
+        db.query(
+          `SELECT verification_id, source, status, details, checked_at, signed_off_by, signed_off_at
+           FROM verification_results WHERE candidate_id=$1 AND org_id=$2 ORDER BY checked_at DESC`,
           [id, req.user!.org_id]
         ),
       ]);
@@ -158,6 +180,7 @@ router.get(
         documents: documents.rows,
         evaluation_summary: evaluations.rows,
         scoring: scoring.rows[0] ?? null,
+        verification_results: verifications.rows,
       });
     } catch (err) {
       next(err);
@@ -363,6 +386,50 @@ router.patch(
       });
 
       res.status(200).json({ dimension_score: updated.rows[0] });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
+ * POST /api/v1/candidates/:id/notes
+ * Add a human note to a candidate record. Audited as CANDIDATE_NOTE_ADDED.
+ * RBAC: RECRUITER+.
+ */
+const NoteBodySchema = z.object({
+  note: z.string().min(1, "note is required"),
+});
+
+router.post(
+  "/:id/notes",
+  authenticate,
+  rbac("RECRUITER", "SENIOR_RECRUITER", "ADMIN"),
+  validate({ params: IdParamSchema, body: NoteBodySchema }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params as unknown as z.infer<typeof IdParamSchema>;
+      const { note } = req.body as z.infer<typeof NoteBodySchema>;
+
+      const existing = await db.query(
+        `SELECT candidate_id FROM candidates WHERE candidate_id=$1 AND org_id=$2`,
+        [id, req.user!.org_id]
+      );
+      if (existing.rowCount === 0) {
+        res.status(404).json({ error: "Candidate not found" });
+        return;
+      }
+
+      await logAudit({
+        org_id: req.user!.org_id,
+        entity_type: "CANDIDATE",
+        entity_id: id,
+        agent_or_user: req.user!.user_id,
+        action: "CANDIDATE_NOTE_ADDED",
+        reason_comment: note,
+      });
+
+      res.status(201).json({ ok: true, note, candidate_id: id });
     } catch (err) {
       next(err);
     }

@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CommandBar } from "./components/CommandBar";
 import { PipelineStrip } from "./components/PipelineStrip";
 import { DecisionQueue } from "./components/DecisionQueue";
+import { CandidateList } from "./components/CandidateList";
+import { CandidateInspector } from "./components/CandidateInspector";
 import { AuditStream } from "./components/AuditStream";
 import { AgentHealth } from "./components/AgentHealth";
 import { AppealsPanel } from "./components/AppealsPanel";
@@ -19,7 +21,13 @@ import { RecruitmentAnalyticsPanel } from "./components/RecruitmentAnalyticsPane
 import { OffboardingPanel } from "./components/OffboardingPanel";
 import { RediscoveryPanel } from "./components/RediscoveryPanel";
 import { HilGateInbox } from "./components/HilGateInbox";
-import { I18nProvider } from "./i18n";
+import { LoginScreen } from "./components/auth/LoginScreen";
+import { ForgotPasswordScreen } from "./components/auth/ForgotPasswordScreen";
+import { ResetPasswordScreen } from "./components/auth/ResetPasswordScreen";
+import { ChangePasswordScreen } from "./components/auth/ChangePasswordScreen";
+import { SessionManager } from "./components/auth/SessionManager";
+import { AuthProvider, useAuth } from "./auth/AuthContext";
+import { I18nProvider, useI18n } from "./i18n";
 
 const TABS = [
   { key: "recruitment", label: "Recruitment" },
@@ -42,12 +50,114 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]["key"];
 
+/**
+ * Quest 05 Part 1c — route guard. The auth provider decides between the
+ * sign-in surface and the dashboard; password-reset links land on
+ * /reset-password?token=… and in-app views ride the URL hash. No router
+ * library, consistent with the rest of this shell.
+ */
 export function App() {
+  return (
+    <I18nProvider>
+      <AuthProvider>
+        <AppBody />
+      </AuthProvider>
+    </I18nProvider>
+  );
+}
+
+/** Current hash as state, so view swaps re-render without a router. */
+function useHashView(): string {
+  const [hash, setHash] = useState(window.location.hash);
+  useEffect(() => {
+    const onChange = () => setHash(window.location.hash);
+    window.addEventListener("hashchange", onChange);
+    return () => window.removeEventListener("hashchange", onChange);
+  }, []);
+  return hash;
+}
+
+function AppBody() {
+  const { status } = useAuth();
+  const { t } = useI18n();
+  const hash = useHashView();
+
+  if (status === "loading") {
+    return <AuthShell>{<p className="text-sm text-text-secondary">{t("auth.checkingSession")}</p>}</AuthShell>;
+  }
+
+  if (status === "unauthenticated") {
+    // One-time reset links land on /reset-password?token=… at the UI origin.
+    if (window.location.pathname === "/reset-password") {
+      return <AuthShell><ResetPasswordScreen /></AuthShell>;
+    }
+    if (hash === "#/forgot") {
+      return <AuthShell><ForgotPasswordScreen /></AuthShell>;
+    }
+    return <AuthShell><LoginScreen /></AuthShell>;
+  }
+
+  // Authenticated in-app views (CommandBar links); back = clear the hash.
+  // Quest 05 Part 4 — #/candidates route opens the full candidate list.
+  if (hash.startsWith("#/candidates")) {
+    return <CandidateListView />;
+  }
+  if (hash === "#/sessions") {
+    return (
+      <DashboardOverlay title={t("auth.sessionsTitle")}>
+        <SessionManager />
+      </DashboardOverlay>
+    );
+  }
+  if (hash === "#/password") {
+    return (
+      <DashboardOverlay title={t("auth.changePasswordTitle")}>
+        <ChangePasswordScreen />
+      </DashboardOverlay>
+    );
+  }
+
+  return <Dashboard />;
+}
+
+function AuthShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex h-screen flex-col items-center justify-center gap-4 bg-background p-4">
+      <div className="text-center">
+        <div className="text-xl font-semibold text-text-primary">UROS</div>
+        <div className="text-xs text-text-secondary">Unified Recruitment Operating System</div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function DashboardOverlay({ title, children }: { title: string; children: React.ReactNode }) {
+  const { t } = useI18n();
+  return (
+    <div className="flex h-screen flex-col bg-background">
+      <CommandBar />
+      <div className="flex-1 overflow-auto p-6">
+        <button
+          onClick={() => {
+            window.location.hash = "";
+          }}
+          className="mb-3 text-xs text-text-secondary hover:text-text-primary"
+        >
+          ← {t("auth.backToDashboard")}
+        </button>
+        <h2 className="mb-3 text-sm font-semibold text-text-primary">{title}</h2>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Dashboard() {
   const [tab, setTab] = useState<TabKey>("recruitment");
 
   return (
-    <I18nProvider>
-      <div className="flex h-screen flex-col bg-background">
+    <div className="flex h-screen flex-col bg-background">
       <CommandBar />
 
       <div className="flex items-center gap-1 border-b border-border-soft bg-surface px-6 py-2">
@@ -100,8 +210,7 @@ export function App() {
           </div>
         </div>
       </div>
-      </div>
-    </I18nProvider>
+    </div>
   );
 }
 
@@ -110,6 +219,40 @@ function PanelCard({ title, children }: { title: string; children: React.ReactNo
     <div className="rounded-lg border border-border-soft bg-surface p-4">
       <h2 className="mb-3 text-sm font-semibold text-text-primary">{title}</h2>
       {children}
+    </div>
+  );
+}
+
+/** Quest 05 Part 4 — Candidate list + inspector side panel. */
+function CandidateListView() {
+  // Parse hash for inspect param: #/candidates?inspect=<id>
+  const hashParams = window.location.hash.includes("?")
+    ? new URLSearchParams(window.location.hash.split("?")[1])
+    : null;
+  const initialInspect = hashParams?.get("inspect") ?? null;
+  const [inspecting, setInspecting] = useState<string | null>(initialInspect);
+
+  return (
+    <div className="flex h-screen flex-col bg-background">
+      <CommandBar />
+      <div className="flex-1 overflow-hidden p-4">
+        <button
+          onClick={() => { window.location.hash = ""; }}
+          className="mb-3 text-xs text-text-secondary hover:text-text-primary"
+        >
+          ← Back to Dashboard
+        </button>
+        <div className="flex h-[calc(100%-2rem)] gap-4">
+          <div className={`flex-1 overflow-hidden ${inspecting ? "mr-0" : ""}`}>
+            <CandidateList onInspect={(id) => setInspecting(id)} />
+          </div>
+          {inspecting && (
+            <div className="w-96 flex-shrink-0 overflow-hidden">
+              <CandidateInspector candidateId={inspecting} onClose={() => setInspecting(null)} />
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

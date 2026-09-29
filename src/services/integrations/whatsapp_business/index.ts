@@ -4,14 +4,15 @@ import { logAudit } from "../../../utils/audit_helper";
 import { logger } from "../../../utils/logger";
 
 export interface WhatsAppRecipient {
-  candidate_id: string;
+  /** Null for user-directed sends (e.g. auth password-reset links). */
+  candidate_id: string | null;
   phone: string;
   template_name: string;
   template_params: Record<string, string>;
 }
 
 export interface WhatsAppSendResult {
-  candidate_id: string;
+  candidate_id: string | null;
   message_id?: string;
   status: "SENT" | "FAILED";
   last_error?: string;

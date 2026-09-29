@@ -4,7 +4,8 @@ import { logAudit } from "../../../utils/audit_helper";
 import { logger } from "../../../utils/logger";
 
 export interface SmsSendResult {
-  candidate_id: string;
+  /** Null for user-directed sends (e.g. auth password-reset links). */
+  candidate_id: string | null;
   phone: string;
   status: "SENT" | "FAILED";
   attempts: number;
@@ -12,7 +13,8 @@ export interface SmsSendResult {
 }
 
 export interface SmsRecipient {
-  candidate_id: string;
+  /** Null for user-directed sends (e.g. auth password-reset links). */
+  candidate_id: string | null;
   phone: string;
   message: string;
 }

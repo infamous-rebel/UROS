@@ -1,41 +1,34 @@
 import { useState } from "react";
 import { useHealth } from "../api/hooks";
-import { getToken, setToken, clearToken, authedRequest } from "../api/client";
+import { getToken, setToken, clearToken, authedRequest, getAccessToken } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import { useI18n } from "../i18n";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import type { SupportedLanguage } from "../i18n";
 
+// Quest 05 Part 1c: the dev-token paste is removed from the ordinary UI.
+// It survives only behind an explicit double flag (dev build + env opt-in)
+// for service-token workflows (e.g. driving the stateless-token path of
+// the auth middleware); it never holds a person's session.
+const DEV_AUTH_ENABLED =
+  Boolean((import.meta as any).env?.DEV) && (import.meta as any).env?.VITE_DEV_AUTH_ENABLED === "true";
+
 export function CommandBar() {
   const { data: health, isError } = useHealth();
+  const { user, signOut } = useAuth();
   const [tokenInput, setTokenInput] = useState("");
-  const [hasToken, setHasToken] = useState(!!getToken());
   const { t } = useI18n();
 
   function applyToken() {
     if (!tokenInput.trim()) return;
     setToken(tokenInput.trim());
-    setHasToken(true);
     setTokenInput("");
     // Force queries gated on getToken() to re-evaluate `enabled`.
     window.location.reload();
   }
 
-  function signOut() {
-    clearToken();
-    setHasToken(false);
-    window.location.reload();
-  }
-
-  /**
-   * Feature 5: best-effort sync of the staff user's dashboard language
-   * choice to users.preferred_language, so it follows them across
-   * devices/sessions. Local UI language (via useI18n/localStorage) has
-   * already been applied by LanguageSwitcher regardless of whether this
-   * call succeeds — a failed PATCH must never block or revert the UI
-   * language change the person just made.
-   */
   function persistLanguagePreference(lang: SupportedLanguage) {
-    if (!hasToken) return;
+    if (!getToken()) return;
     authedRequest("/users/me/language", {
       method: "PATCH",
       body: JSON.stringify({ preferred_language: lang }),
@@ -62,14 +55,34 @@ export function CommandBar() {
       <div className="flex items-center gap-3">
         <LanguageSwitcher onLanguageChange={persistLanguagePreference} />
 
-        {hasToken ? (
-          <button
-            onClick={signOut}
-            className="rounded-md border border-border-soft px-3 py-1.5 text-xs text-text-secondary hover:bg-background"
-          >
-            {t("auth.clearToken")}
-          </button>
-        ) : (
+        {user ? (
+          <>
+            <span className="flex items-center gap-2 rounded-full border border-border-soft bg-background px-3 py-1.5 text-xs">
+              <span className="text-text-primary">{user.email}</span>
+              <span className="rounded-full bg-agent/10 px-2 py-0.5 font-medium text-agent">{user.role}</span>
+            </span>
+            <a
+              href="#/sessions"
+              className="rounded-md border border-border-soft px-3 py-1.5 text-xs text-text-secondary hover:bg-background"
+            >
+              {t("auth.sessions")}
+            </a>
+            <a
+              href="#/password"
+              className="rounded-md border border-border-soft px-3 py-1.5 text-xs text-text-secondary hover:bg-background"
+            >
+              {t("auth.password")}
+            </a>
+            <button
+              onClick={() => {
+                void signOut();
+              }}
+              className="rounded-md border border-border-soft px-3 py-1.5 text-xs text-text-secondary hover:bg-background"
+            >
+              {t("auth.signOut")}
+            </button>
+          </>
+        ) : DEV_AUTH_ENABLED && !getAccessToken() ? (
           <div className="flex items-center gap-2">
             <input
               type="password"
@@ -84,8 +97,17 @@ export function CommandBar() {
             >
               {t("auth.connect")}
             </button>
+            <button
+              onClick={() => {
+                clearToken();
+                window.location.reload();
+              }}
+              className="rounded-md border border-border-soft px-3 py-1.5 text-xs text-text-secondary hover:bg-background"
+            >
+              {t("auth.clearToken")}
+            </button>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

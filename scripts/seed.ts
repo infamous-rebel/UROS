@@ -6,13 +6,13 @@
  * for existing data first and skips if already present.
  *
  * Usage: npm run seed
- * Requires: DATABASE_URL and JWT_SECRET in environment.
+ * Requires: DATABASE_URL in environment. Prints the first admin's
+ * one-time set-password link (Quest 05 Decision Lock 1 bootstrap).
  */
 import { Pool } from "pg";
-import jwt from "jsonwebtoken";
+import { createHash, randomBytes } from "crypto";
 
 const DATABASE_URL = process.env.DATABASE_URL;
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-must-be-at-least-32-chars-long!!";
 
 if (!DATABASE_URL) {
   console.error("DATABASE_URL is required");
@@ -46,13 +46,39 @@ async function seed(): Promise<void> {
     `, [DEMO_ORG_ID]);
     console.log("  ✓ Organization: Demo Bank Ltd");
 
-    // 2. Admin user
+    // 2. Admin user — Quest 05 Decision Lock 1: the first admin is
+    // created with password_reset_required = true and NO password.
+    // Sign-in is only possible after completing a set-password link
+    // (SMS-first / email fallback) or in-person admin handoff; there are
+    // no temp passwords and no admin bypass.
     await pool.query(`
-      INSERT INTO users (user_id, org_id, full_name, email, role, active)
-      VALUES ($1, $2, 'Demo Admin', 'admin@demobank.example.com', 'ADMIN', true)
+      INSERT INTO users (user_id, org_id, full_name, email, phone, role, active, password_reset_required)
+      VALUES ($1, $2, 'Demo Admin', 'admin@demobank.example.com', '+8801700000009', 'ADMIN', true, true)
       ON CONFLICT (user_id) DO NOTHING
     `, [DEMO_ADMIN_ID, DEMO_ORG_ID]);
-    console.log("  ✓ Admin user: admin@demobank.example.com");
+    console.log("  ✓ Admin user: admin@demobank.example.com (password_reset_required — use a reset link to set the first password)");
+
+    // Bootstrap (Quest 05 Decision Lock 1): the first admin has no
+    // password and cannot sign in, so the seed run itself performs the
+    // in-person handoff — it issues the one-time set-password link and
+    // prints it as a copyable string. Issued only while the account still
+    // requires a reset, so re-running seed after setup prints nothing.
+    const needsReset = await pool.query(
+      `SELECT password_reset_required FROM users WHERE user_id = $1`,
+      [DEMO_ADMIN_ID]
+    );
+    if (needsReset.rows[0]?.password_reset_required) {
+      const raw = randomBytes(32).toString("base64url");
+      const tokenHash = createHash("sha256").update(raw, "utf8").digest("hex");
+      await pool.query(
+        `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at, issued_by, issued_via, channel)
+         VALUES ($1, $2, now() + interval '30 minutes', $1, 'ADMIN_HANDOFF', 'IN_PERSON')`,
+        [DEMO_ADMIN_ID, tokenHash]
+      );
+      const base = process.env.APP_PUBLIC_URL ?? "http://localhost:3000";
+      console.log("  ⚡ First-admin set-password link (one-time, expires in 30 minutes):");
+      console.log(`    ${base}/reset-password?token=${raw}`);
+    }
 
     // 3. Rule pack + version
     await pool.query(`
@@ -130,13 +156,6 @@ async function seed(): Promise<void> {
     }
     console.log("  ✓ Candidates (3)");
 
-    // 6. Generate and display JWT
-    const token = jwt.sign(
-      { user_id: DEMO_ADMIN_ID, org_id: DEMO_ORG_ID, role: "ADMIN" },
-      JWT_SECRET,
-      { expiresIn: "24h" }
-    );
-
     console.log("\n═══════════════════════════════════════════");
     console.log("  Seed complete!");
     console.log("═══════════════════════════════════════════");
@@ -145,7 +164,9 @@ async function seed(): Promise<void> {
     console.log(`  Circular:     ${DEMO_CIRCULAR_ID}`);
     console.log(`  Rule Pack:    ${DEMO_RULE_PACK_ID}`);
     console.log(`  RP Version:   ${DEMO_RULE_PACK_VERSION_ID}`);
-    console.log(`\n  JWT (24h):\n  ${token}`);
+    // Quest 05 Decision Lock 1: no printed credentials and no admin
+    // bypass — the only way in is the one-time set-password link printed
+    // above. No long-lived JWT is minted here anymore.
     console.log("═══════════════════════════════════════════\n");
   } finally {
     await pool.end();
