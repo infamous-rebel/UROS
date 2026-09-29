@@ -52,7 +52,7 @@ const ICON_NAMES = [
   "Key",
   "Link",
   "Plug",
-  "Masks",
+  "VenetianMask",
   "CircleCheck",
   "HardDrive",
   "ClipboardList",

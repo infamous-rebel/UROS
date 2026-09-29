@@ -26,7 +26,7 @@ const TABS: { key: SettingsTab; label: string; icon: string }[] = [
   { key: "credentials", label: "Credentials", icon: "Key" },
   { key: "fallback", label: "Fallback Chains", icon: "Link" },
   { key: "integrations", label: "Integrations", icon: "Plug" },
-  { key: "personas", label: "Personas", icon: "Masks" },
+  { key: "personas", label: "Personas", icon: "VenetianMask" },
   { key: "kpi", label: "KPI Templates", icon: "BarChart3" },
   { key: "onboarding", label: "Onboarding", icon: "CircleCheck" },
   { key: "backup", label: "Backup", icon: "HardDrive" },
