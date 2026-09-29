@@ -7,6 +7,8 @@ import {
 } from "../hooks/hooks_dimensions";
 import { getToken } from "../api/client";
 import { EmptyState } from "./EmptyState";
+import { getIcon } from "./navigation/iconRegistry";
+import { Icon } from "./navigation/Icon";
 
 const DECISION_COLOR: Record<string, string> = {
   AUTO_PASS: "text-success",
@@ -57,7 +59,7 @@ function DimensionRow({ dim }: { dim: DimensionBreakdownEntry }) {
             knockout
           </span>
         )}
-        <span className="flex-shrink-0 text-xs text-text-secondary">{open ? "▲" : "▼"}</span>
+        <span className="flex-shrink-0 text-xs text-text-secondary"><Icon icon={getIcon(open ? "ChevronUp" : "ChevronDown")} size={14} tone="neutral" /></span>
       </button>
 
       {open && (

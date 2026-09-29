@@ -1,9 +1,11 @@
 /**
- * Quest 05 Part 8b — Command palette (Cmd+K overlay).
+ * Quest 05 Part 8b/8c — Command palette (Cmd+K overlay).
  * Full-screen overlay with fuzzy search across routes + candidates + rules + gates + audits.
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { getIcon } from "./iconRegistry";
+import { Icon } from "./Icon";
 import type { NavItemId } from "../../config/navConfig";
 import { getAllNavItems, findNavGroup } from "../../config/navConfig";
 
@@ -19,6 +21,7 @@ interface SearchResult {
   label: string;
   subtitle?: string;
   navId?: NavItemId;
+  iconName?: string;
 }
 
 export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProps) {
@@ -27,7 +30,6 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Focus input when opened
   useEffect(() => {
     if (open) {
       setQuery("");
@@ -36,7 +38,6 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
     }
   }, [open]);
 
-  // Close on Esc
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && open) {
@@ -47,12 +48,10 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [open, onClose]);
 
-  // Search logic
   const search = useCallback((q: string) => {
     const query = q.toLowerCase().trim();
     const results: SearchResult[] = [];
 
-    // Nav items
     const navItems = getAllNavItems();
     for (const item of navItems) {
       if (!query || item.label.toLowerCase().includes(query)) {
@@ -63,23 +62,19 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
           label: item.label,
           subtitle: group?.label,
           navId: item.id,
+          iconName: item.icon,
         });
       }
     }
 
-    // TODO: Add candidate, rule, gate, audit search when API endpoints exist
-    // For now, just nav items
-
     return results.slice(0, 20);
   }, []);
 
-  // Update results on query change
   useEffect(() => {
     setResults(search(query));
     setSelectedIndex(0);
   }, [query, search]);
 
-  // Keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -99,6 +94,8 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
 
   if (!open) return null;
 
+  const CommandIcon = getIcon("Command");
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]">
       {/* Backdrop */}
@@ -110,7 +107,8 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
       {/* Palette */}
       <div className="relative w-full max-w-xl rounded-xl border border-border-soft bg-surface shadow-2xl">
         {/* Search input */}
-        <div className="border-b border-border-soft p-4">
+        <div className="flex items-center gap-2 border-b border-border-soft p-4">
+          <Icon icon={getIcon("Search")} size={18} tone="neutral" />
           <input
             ref={inputRef}
             type="text"
@@ -120,6 +118,8 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
             placeholder="Search navigation, candidates, rules, gates, audits..."
             className="w-full bg-transparent text-sm text-text-primary placeholder:text-text-secondary focus:outline-none"
           />
+          <Icon icon={CommandIcon} size={14} tone="neutral" className="flex-shrink-0" />
+          <span className="text-xs text-text-secondary">K</span>
         </div>
 
         {/* Results */}
@@ -130,44 +130,41 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
             </div>
           ) : (
             <div className="space-y-1">
-              {results.map((result, index) => (
-                <button
-                  key={result.id}
-                  onClick={() => {
-                    if (result.navId) {
-                      onNavigate(result.navId);
-                      onClose();
-                    }
-                  }}
-                  className={`flex w-full items-center gap-3 rounded-lg px-4 py-2 text-left text-sm ${
-                    index === selectedIndex
-                      ? "bg-agent/10 text-text-primary"
-                      : "text-text-secondary hover:bg-background hover:text-text-primary"
-                  }`}
-                >
-                  <span className="text-base">
-                    {result.type === "nav" && "→"}
-                    {result.type === "candidate" && "👤"}
-                    {result.type === "rule" && "📏"}
-                    {result.type === "gate" && "🚧"}
-                    {result.type === "audit" && "📜"}
-                  </span>
-                  <div className="flex-1">
-                    <div className="font-medium">{result.label}</div>
-                    {result.subtitle && (
-                      <div className="text-xs text-text-secondary">{result.subtitle}</div>
-                    )}
-                  </div>
-                </button>
-              ))}
+              {results.map((result, index) => {
+                const ResultIcon = getIcon(result.iconName ?? "LayoutDashboard");
+                return (
+                  <button
+                    key={result.id}
+                    onClick={() => {
+                      if (result.navId) {
+                        onNavigate(result.navId);
+                        onClose();
+                      }
+                    }}
+                    className={`flex w-full items-center gap-3 rounded-lg px-4 py-2 text-left text-sm ${
+                      index === selectedIndex
+                        ? "bg-agent/10 text-text-primary"
+                        : "text-text-secondary hover:bg-background hover:text-text-primary"
+                    }`}
+                  >
+                    <Icon icon={ResultIcon} size={18} tone={index === selectedIndex ? "system" : "neutral"} />
+                    <div className="flex-1">
+                      <div className="font-medium">{result.label}</div>
+                      {result.subtitle && (
+                        <div className="text-xs text-text-secondary">{result.subtitle}</div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="border-t border-border-soft px-4 py-2 text-xs text-text-secondary">
-          <span className="mr-4">↑↓ Navigate</span>
-          <span className="mr-4">↵ Open</span>
+        <div className="flex items-center gap-4 border-t border-border-soft px-4 py-2 text-xs text-text-secondary">
+          <span>↑↓ Navigate</span>
+          <span>↵ Open</span>
           <span>Esc Close</span>
         </div>
       </div>

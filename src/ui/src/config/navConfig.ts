@@ -1,7 +1,8 @@
 /**
- * Quest 05 Part 8b — Navigation configuration.
+ * Quest 05 Part 8b/8c — Navigation configuration.
  * Defines the sidebar structure with grouped sections.
  * Every tab in App.tsx must appear here for CI guard compliance.
+ * Icons are Lucide component names (resolved in NavItem.tsx).
  */
 
 export type NavItemId =
@@ -32,7 +33,7 @@ export type NavItemId =
 export interface NavItem {
   id: NavItemId;
   label: string;
-  icon: string;
+  icon: string; // Lucide component name
   /** External link opens in new tab */
   external?: boolean;
   /** RBAC roles that can see this item */
@@ -44,7 +45,7 @@ export interface NavItem {
 export interface NavGroup {
   id: string;
   label: string;
-  icon: string;
+  icon: string; // Lucide component name
   items: NavItem[];
   /** RBAC roles that can see this group */
   allowedRoles?: string[];
@@ -54,67 +55,67 @@ export const NAV_CONFIG: NavGroup[] = [
   {
     id: "recruitment",
     label: "RECRUITMENT",
-    icon: "📋",
+    icon: "LayoutDashboard",
     items: [
-      { id: "recruitment", label: "Dashboard", icon: "🏠" },
-      { id: "intake", label: "Intake", icon: "📥" },
-      { id: "gates", label: "HIL Gates", icon: "🚧" },
+      { id: "recruitment", label: "Dashboard", icon: "LayoutDashboard" },
+      { id: "intake", label: "Intake", icon: "Inbox" },
+      { id: "gates", label: "HIL Gates", icon: "GitPullRequestArrow" },
     ],
   },
   {
     id: "assessment",
     label: "ASSESSMENT",
-    icon: "📝",
+    icon: "FileText",
     items: [
-      { id: "mcq", label: "MCQ Scanner", icon: "📄" },
-      { id: "exams", label: "Digital Exam Creator", icon: "💻" },
-      { id: "dimensions", label: "7-Dimension Matching", icon: "🎯" },
+      { id: "mcq", label: "MCQ Scanner", icon: "ScanLine" },
+      { id: "exams", label: "Digital Exam Creator", icon: "FilePen" },
+      { id: "dimensions", label: "7-Dimension Matching", icon: "Radar" },
     ],
   },
   {
     id: "quality",
     label: "QUALITY & VERIFICATION",
-    icon: "✓",
+    icon: "ShieldCheck",
     items: [
-      { id: "fraud", label: "Fraud Detection", icon: "🔍" },
-      { id: "references", label: "Reference Checks", icon: "📞" },
-      { id: "verification", label: "Verification Center", icon: "✅" },
+      { id: "fraud", label: "Fraud Detection", icon: "ShieldAlert" },
+      { id: "references", label: "Reference Checks", icon: "UserCheck" },
+      { id: "verification", label: "Verification Center", icon: "ShieldCheck" },
     ],
   },
   {
     id: "people",
     label: "PEOPLE",
-    icon: "👥",
+    icon: "Users",
     items: [
-      { id: "onboarding", label: "Onboarding", icon: "🎉" },
-      { id: "kpi", label: "KPI", icon: "📊" },
-      { id: "personas", label: "Personas", icon: "🎭" },
-      { id: "improvements", label: "Improvement Advisor", icon: "💡" },
-      { id: "tasks", label: "Task Logs", icon: "📋" },
-      { id: "offboarding", label: "Offboarding", icon: "👋" },
+      { id: "onboarding", label: "Onboarding", icon: "UserPlus" },
+      { id: "kpi", label: "KPI", icon: "Target" },
+      { id: "personas", label: "Personas", icon: "Users" },
+      { id: "improvements", label: "Improvement Advisor", icon: "Lightbulb" },
+      { id: "tasks", label: "Task Logs", icon: "ListChecks" },
+      { id: "offboarding", label: "Offboarding", icon: "UserMinus" },
     ],
   },
   {
     id: "analytics_group",
     label: "ANALYTICS",
-    icon: "📈",
+    icon: "BarChart3",
     items: [
-      { id: "analytics", label: "Recruitment Analytics", icon: "📊" },
-      { id: "reports", label: "Reports", icon: "📑" },
-      { id: "rediscovery", label: "Candidate Rediscovery", icon: "🔎" },
+      { id: "analytics", label: "Recruitment Analytics", icon: "BarChart3" },
+      { id: "reports", label: "Reports", icon: "FileText" },
+      { id: "rediscovery", label: "Candidate Rediscovery", icon: "Search" },
     ],
   },
   {
     id: "admin",
     label: "ADMIN",
-    icon: "⚙️",
+    icon: "Settings",
     allowedRoles: ["ADMIN", "AUDITOR"],
     items: [
-      { id: "brain", label: "Brain Studio", icon: "🧠" },
-      { id: "appeals", label: "Appeals", icon: "⚖️" },
-      { id: "audit", label: "Audit", icon: "📜" },
-      { id: "settings", label: "Settings", icon: "⚙️" },
-      { id: "skills_portal", label: "Skills Portal", icon: "🎓", external: true },
+      { id: "brain", label: "Brain Studio", icon: "Brain" },
+      { id: "appeals", label: "Appeals", icon: "MessageSquareWarning" },
+      { id: "audit", label: "Audit", icon: "ScrollText" },
+      { id: "settings", label: "Settings", icon: "Settings" },
+      { id: "skills_portal", label: "Skills Portal", icon: "ExternalLink", external: true },
     ],
   },
 ];
@@ -137,11 +138,9 @@ export function findNavGroup(itemId: NavItemId): NavGroup | undefined {
 /** Filter nav config by user role */
 export function filterNavByRole(role: string): NavGroup[] {
   return NAV_CONFIG.map((group) => {
-    // Filter group-level roles
     if (group.allowedRoles && !group.allowedRoles.includes(role)) {
       return null;
     }
-    // Filter item-level roles
     const filteredItems = group.items.filter(
       (item) => !item.allowedRoles || item.allowedRoles.includes(role)
     );

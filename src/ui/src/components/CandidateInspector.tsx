@@ -26,6 +26,8 @@ import {
   type AuditLogEntry,
 } from "../api/client";
 import { DownloadButton } from "./DownloadButton";
+import { getIcon } from "./navigation/iconRegistry";
+import { Icon } from "./navigation/Icon";
 
 interface Props {
   candidateId: string;
@@ -142,7 +144,7 @@ export function CandidateInspector({ candidateId, onClose }: Props) {
             className="rounded p-1 text-text-secondary hover:bg-background hover:text-text-primary"
             title="Close inspector"
           >
-            ✕
+            <Icon icon={getIcon("X")} size={16} tone="neutral" />
           </button>
         </div>
       </div>
@@ -383,14 +385,14 @@ function EvidencePanel({
                 <img src={fileLocation} alt={fileName ?? "Document"} className="max-h-60 w-full rounded object-contain" />
               ) : (fileLocation ?? "").match(/\.pdf$/i) ? (
                 <div className="flex flex-col items-center gap-2 py-4">
-                  <span className="text-2xl">📄</span>
+                  <Icon icon={getIcon("File")} size={24} tone="neutral" />
                   <a href={fileLocation} target="_blank" rel="noopener noreferrer" className="text-xs text-agent hover:underline">
                     Open PDF: {fileName ?? "document.pdf"}
                   </a>
                 </div>
               ) : (
                 <div className="py-4 text-center text-xs text-text-secondary">
-                  <span className="text-lg">📎</span>
+                  <Icon icon={getIcon("Paperclip")} size={18} tone="neutral" />
                   <div className="mt-1">{fileName ?? "Document attached"}</div>
                   <a href={fileLocation} target="_blank" rel="noopener noreferrer" className="text-agent hover:underline">
                     Download
@@ -400,7 +402,7 @@ function EvidencePanel({
             </div>
           ) : (
             <div className="flex flex-col items-center gap-2 py-6 text-center">
-              <span className="text-lg text-text-secondary">📭</span>
+              <Icon icon={getIcon("Mailbox")} size={18} tone="neutral" className="text-text-secondary" />
               <p className="text-xs text-text-secondary">Document not available</p>
               <p className="text-xs text-agent">Use Actions → Request Documents to ask the candidate.</p>
             </div>

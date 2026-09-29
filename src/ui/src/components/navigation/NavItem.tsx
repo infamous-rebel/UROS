@@ -1,8 +1,10 @@
 /**
- * Quest 05 Part 8b — Single navigation item.
- * Shows icon, label, badge, and star for pinning.
+ * Quest 05 Part 8b/8c — Single navigation item.
+ * Shows Lucide icon, label, badge, and star for pinning.
  */
 
+import { getIcon } from "./iconRegistry";
+import { Icon } from "./Icon";
 import type { NavItem as NavItemType } from "../../config/navConfig";
 
 interface NavItemProps {
@@ -17,7 +19,6 @@ interface NavItemProps {
 export function NavItem({ item, active, collapsed, pinned, onClick, onPin }: NavItemProps) {
   const handleClick = () => {
     if (item.external) {
-      // External links open in new tab
       window.open("https://skills.uros.local", "_blank", "noopener,noreferrer");
     } else {
       onClick();
@@ -31,6 +32,9 @@ export function NavItem({ item, active, collapsed, pinned, onClick, onPin }: Nav
     }
   };
 
+  const IconComponent = getIcon(item.icon);
+  const StarIcon = getIcon("Star");
+
   return (
     <div
       role="button"
@@ -43,8 +47,8 @@ export function NavItem({ item, active, collapsed, pinned, onClick, onPin }: Nav
           : "text-text-secondary hover:bg-background hover:text-text-primary"
       }`}
     >
-      {/* Icon */}
-      <span className="flex-shrink-0 text-base">{item.icon}</span>
+      {/* Lucide Icon */}
+      <Icon icon={IconComponent} size={20} tone={active ? "system" : "neutral"} className="flex-shrink-0" />
 
       {/* Label (hidden when collapsed) */}
       {!collapsed && (
@@ -56,11 +60,6 @@ export function NavItem({ item, active, collapsed, pinned, onClick, onPin }: Nav
         <span className="ml-auto rounded-full bg-warning px-1.5 py-0.5 text-[10px] font-semibold text-white">
           {item.badge}
         </span>
-      )}
-
-      {/* External icon */}
-      {item.external && !collapsed && (
-        <span className="ml-1 text-[10px] text-text-secondary">↗</span>
       )}
 
       {/* Pin star (visible on hover or if already pinned) */}
@@ -75,15 +74,14 @@ export function NavItem({ item, active, collapsed, pinned, onClick, onPin }: Nav
           }`}
           aria-label={pinned ? "Unpin" : "Pin"}
         >
-          {pinned ? "★" : "☆"}
+          <Icon icon={StarIcon} size={14} tone={pinned ? "attention" : "neutral"} />
         </button>
       )}
 
       {/* Tooltip when collapsed */}
       {collapsed && (
-        <div className="pointer-events-none absolute left-full ml-2 hidden rounded bg-gray-900 px-2 py-1 text-xs text-white group-hover:block z-50">
+        <div className="pointer-events-none absolute left-full ml-2 hidden rounded bg-gray-900 px-2 py-1 text-xs text-white group-hover:block z-50 whitespace-nowrap">
           {item.label}
-          {item.external && " ↗"}
         </div>
       )}
     </div>

@@ -14,6 +14,8 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { API_V1, authedRequest } from "../api/client";
+import { getIcon } from "./navigation/iconRegistry";
+import { Icon } from "./navigation/Icon";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -262,7 +264,7 @@ function RulesList({ packs, onSelect, onCreate }: {
       {packs.length === 0 ? (
         <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border-soft py-10">
           <div className="text-center">
-            <div className="mb-2 text-3xl">🧠</div>
+            <div className="mb-2 text-3xl"><Icon icon={getIcon("Brain")} size={32} tone="system" className="mx-auto" /></div>
             <p className="text-sm font-medium text-text-secondary">No rule packs yet</p>
             <p className="mt-1 text-xs text-text-secondary">Create your first pack to start configuring rules.</p>
           </div>
@@ -510,12 +512,12 @@ function RuleCard({ rule, onToggle, onDelete, onClone }: {
             {rule.active ? "Active" : "Paused"}
           </button>
           {/* Clone */}
-          <button onClick={onClone} className="text-xs text-text-secondary hover:text-agent" title="Clone">⧉</button>
+          <button onClick={onClone} className="text-xs text-text-secondary hover:text-agent" title="Clone"><Icon icon={getIcon("Copy")} size={14} tone="neutral" /></button>
           {/* Delete */}
-          <button onClick={onDelete} className="text-xs text-text-secondary hover:text-human" title="Deactivate">✕</button>
+          <button onClick={onDelete} className="text-xs text-text-secondary hover:text-human" title="Deactivate"><Icon icon={getIcon("X")} size={14} tone="neutral" /></button>
           {/* Expand */}
           <button onClick={() => setExpanded(!expanded)} className="text-xs text-text-secondary hover:text-text-primary">
-            {expanded ? "▴" : "▾"}
+            <Icon icon={getIcon(expanded ? "ChevronUp" : "ChevronDown")} size={14} tone="neutral" />
           </button>
         </div>
       </div>
@@ -771,7 +773,7 @@ function ConflictBanner({ conflicts, rules }: { conflicts: Conflict[]; rules: Ru
     <div className="mb-3 rounded-lg border border-human/30 bg-human/5 p-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-human">⚠</span>
+          <span className="text-human"><Icon icon={getIcon("AlertTriangle")} size={16} tone="human" /></span>
           <span className="text-sm font-semibold text-human">
             {conflicts.length} conflict{conflicts.length !== 1 ? "s" : ""} detected
           </span>
@@ -894,7 +896,7 @@ function SimulationPanel({ packId, versionId, onClose }: {
     <div className="mb-4 rounded-lg border border-agent/20 bg-surface p-4">
       <div className="mb-3 flex items-center justify-between">
         <h4 className="text-xs font-semibold text-text-primary">Simulation Panel</h4>
-        <button onClick={onClose} className="text-xs text-text-secondary hover:text-text-primary">✕</button>
+        <button onClick={onClose} className="text-xs text-text-secondary hover:text-text-primary"><Icon icon={getIcon("X")} size={14} tone="neutral" /></button>
       </div>
 
       <p className="mb-2 text-xs text-text-secondary">

@@ -7,6 +7,8 @@
 import { useState, useRef, useCallback } from "react";
 import { getToken, API_V1 } from "../api/client";
 import { DownloadButton } from "./DownloadButton";
+import { getIcon } from "./navigation/iconRegistry";
+import { Icon } from "./navigation/Icon";
 
 interface ImportResult {
   batch_id: string;
@@ -155,7 +157,7 @@ export function CandidateIntakePanel() {
             onClick={() => fileInputRef.current?.click()}
             className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-border-soft bg-background py-8 transition-colors hover:border-agent"
           >
-            <span className="text-2xl">📄</span>
+            <Icon icon={getIcon("File")} size={24} tone="neutral" />
             <p className="mt-2 text-sm text-text-primary">Drop a CV here or click to browse</p>
             <p className="text-xs text-text-secondary">PDF, DOCX, JPG, PNG — max 20 MB</p>
             <input
@@ -184,7 +186,7 @@ export function CandidateIntakePanel() {
             onClick={() => csvInputRef.current?.click()}
             className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-border-soft bg-background py-6 transition-colors hover:border-agent"
           >
-            <span className="text-2xl">📊</span>
+            <Icon icon={getIcon("BarChart3")} size={24} tone="neutral" />
             <p className="mt-2 text-sm text-text-primary">Drop a CSV file or click to browse</p>
             <input
               ref={csvInputRef}

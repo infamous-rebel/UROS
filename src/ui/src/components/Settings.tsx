@@ -13,23 +13,25 @@
 import { useState, useEffect, useCallback } from "react";
 import { API_V1, authedRequest } from "../api/client";
 import { DownloadButton } from "./DownloadButton";
+import { getIcon } from "./navigation/iconRegistry";
+import { Icon } from "./navigation/Icon";
 
 type SettingsTab = "profile" | "organization" | "users" | "credentials" | "fallback" |
   "integrations" | "personas" | "kpi" | "onboarding" | "backup" | "audit" | "export";
 
 const TABS: { key: SettingsTab; label: string; icon: string }[] = [
-  { key: "profile", label: "Profile", icon: "👤" },
-  { key: "organization", label: "Organization", icon: "🏢" },
-  { key: "users", label: "Users", icon: "👥" },
-  { key: "credentials", label: "Credentials", icon: "🔑" },
-  { key: "fallback", label: "Fallback Chains", icon: "🔗" },
-  { key: "integrations", label: "Integrations", icon: "🔌" },
-  { key: "personas", label: "Personas", icon: "🎭" },
-  { key: "kpi", label: "KPI Templates", icon: "📊" },
-  { key: "onboarding", label: "Onboarding", icon: "✅" },
-  { key: "backup", label: "Backup", icon: "💾" },
-  { key: "audit", label: "Audit & Retention", icon: "📋" },
-  { key: "export", label: "Data Export", icon: "📦" },
+  { key: "profile", label: "Profile", icon: "User" },
+  { key: "organization", label: "Organization", icon: "Building2" },
+  { key: "users", label: "Users", icon: "Users" },
+  { key: "credentials", label: "Credentials", icon: "Key" },
+  { key: "fallback", label: "Fallback Chains", icon: "Link" },
+  { key: "integrations", label: "Integrations", icon: "Plug" },
+  { key: "personas", label: "Personas", icon: "Masks" },
+  { key: "kpi", label: "KPI Templates", icon: "BarChart3" },
+  { key: "onboarding", label: "Onboarding", icon: "CircleCheck" },
+  { key: "backup", label: "Backup", icon: "HardDrive" },
+  { key: "audit", label: "Audit & Retention", icon: "ClipboardList" },
+  { key: "export", label: "Data Export", icon: "Package" },
 ];
 
 export function Settings() {
@@ -47,7 +49,7 @@ export function Settings() {
               tab === t.key ? "bg-agent text-white" : "text-text-secondary hover:bg-background hover:text-text-primary"
             }`}
           >
-            <span>{t.icon}</span>
+            <Icon icon={getIcon(t.icon)} size={16} tone="neutral" />
             <span>{t.label}</span>
           </button>
         ))}
@@ -177,7 +179,7 @@ function ProfileTab() {
       </Field>
       <div className="flex items-center gap-3">
         <SaveButton onClick={handleSave} saving={saving} />
-        {saved && <span className="text-xs text-success">✓ Saved</span>}
+        {saved && <span className="text-xs text-success"><Icon icon={getIcon("Check")} size={12} tone="system" className="inline mr-1" />Saved</span>}
       </div>
 
       {/* Sessions */}
@@ -268,7 +270,7 @@ function OrganizationTab() {
       </Field>
       <div className="flex items-center gap-3">
         <SaveButton onClick={handleSave} saving={saving} />
-        {saved && <span className="text-xs text-success">✓ Saved</span>}
+        {saved && <span className="text-xs text-success"><Icon icon={getIcon("Check")} size={12} tone="system" className="inline mr-1" />Saved</span>}
       </div>
     </div>
   );
@@ -461,7 +463,7 @@ function FallbackTab() {
   return (
     <div>
       <SectionTitle title="Fallback Chains" description="Ordered provider lists for each message type (ADMIN only). Comma-separated provider names." />
-      {saved && <p className="mb-2 text-xs text-success">✓ Chain saved</p>}
+      {saved && <p className="mb-2 text-xs text-success"><Icon icon={getIcon("Check")} size={12} tone="system" className="inline mr-1" />Chain saved</p>}
       {(["SMS", "EMAIL", "WHATSAPP"] as const).map((type) => (
         <div key={type} className="mb-4 rounded-lg border border-border-soft bg-background p-3">
           <div className="mb-2 flex items-center justify-between">
@@ -753,7 +755,7 @@ function AuditTab() {
       </Field>
       <div className="flex items-center gap-3">
         <SaveButton onClick={handleSave} saving={saving} />
-        {saved && <span className="text-xs text-success">✓ Retention updated</span>}
+        {saved && <span className="text-xs text-success"><Icon icon={getIcon("Check")} size={12} tone="system" className="inline mr-1" />Retention updated</span>}
       </div>
 
       <div className="mt-6">

@@ -7,6 +7,8 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getToken, API_V1 } from "../api/client";
+import { getIcon } from "./navigation/iconRegistry";
+import { Icon } from "./navigation/Icon";
 
 export function EmailIntakePanel() {
   const hasToken = !!getToken();
@@ -74,7 +76,7 @@ export function EmailIntakePanel() {
         <p className="text-sm text-text-secondary">Checking email connection…</p>
       ) : !connected ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border-soft py-8">
-          <span className="text-2xl">📧</span>
+          <Icon icon={getIcon("Mail")} size={24} tone="neutral" />
           <p className="max-w-sm text-center text-sm text-text-secondary">
             {data?.message ?? "IMAP not configured. Add IMAP credentials in Settings → Integrations to connect your email inbox."}
           </p>
@@ -82,7 +84,7 @@ export function EmailIntakePanel() {
         </div>
       ) : emails.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border-soft py-8">
-          <span className="text-2xl">📭</span>
+          <Icon icon={getIcon("Mailbox")} size={24} tone="neutral" />
           <p className="text-sm text-text-secondary">No unread emails found.</p>
         </div>
       ) : (

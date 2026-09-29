@@ -11,6 +11,8 @@ import {
 } from "../hooks/hooks_applicant_portal";
 import { I18nProvider, useI18n, SupportedLanguage } from "../i18n";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+import { getIcon } from "./navigation/iconRegistry";
+import { Icon } from "./navigation/Icon";
 
 const PILL_COLOR: Record<string, string> = {
   green: "bg-success text-white",
@@ -30,7 +32,7 @@ function WhyLink({ reasonCode, reasonDescription, evidenceRows }: { reasonCode: 
   return (
     <div>
       <button onClick={() => setOpen((o) => !o)} className="text-xs text-agent underline">
-        {t("portal.why")} {open ? "▲" : "▼"}
+        {t("portal.why")} <Icon icon={getIcon(open ? "ChevronUp" : "ChevronDown")} size={12} tone="neutral" className="inline" />
       </button>
       {open && (
         <div className="mt-2 rounded-md border border-border-soft bg-background p-3 text-xs">

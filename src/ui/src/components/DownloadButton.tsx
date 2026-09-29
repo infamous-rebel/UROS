@@ -13,6 +13,8 @@
  * - Never logs the JWT; never exposes internal URLs
  */
 import { useState, useCallback } from "react";
+import { getIcon } from "./navigation/iconRegistry";
+import { Icon } from "./navigation/Icon";
 import { authedRequest } from "../api/client";
 
 interface DownloadButtonProps {
@@ -116,7 +118,7 @@ export function DownloadButton({
       </button>
 
       {status === "done" && (
-        <span className="text-xs text-success">✓ Downloaded</span>
+        <span className="text-xs text-success"><Icon icon={getIcon("Check")} size={12} tone="system" className="inline mr-1" />Downloaded</span>
       )}
 
       {status === "error" && (

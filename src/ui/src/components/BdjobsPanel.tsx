@@ -7,6 +7,8 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getToken, API_V1 } from "../api/client";
+import { getIcon } from "./navigation/iconRegistry";
+import { Icon } from "./navigation/Icon";
 
 type BdjobsTab = "scraper" | "csv" | "email" | "webhook";
 
@@ -65,7 +67,7 @@ export function BdjobsPanel() {
         <p className="text-sm text-text-secondary">Sign in to access Bdjobs intake.</p>
       ) : !configured ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border-soft py-8">
-          <span className="text-2xl">💼</span>
+          <Icon icon={getIcon("Briefcase")} size={24} tone="neutral" />
           <p className="max-w-sm text-center text-sm text-text-secondary">
             {statusData?.message ?? "Bdjobs not connected. Add API credentials in Settings → Integrations."}
           </p>

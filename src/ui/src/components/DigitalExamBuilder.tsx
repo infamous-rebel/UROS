@@ -18,6 +18,8 @@ import { usePersonas } from "../api/hooks_hr";
 import { getToken, API_V1 } from "../api/client";
 import { EmptyState } from "./EmptyState";
 import { DownloadButton } from "./DownloadButton";
+import { getIcon } from "./navigation/iconRegistry";
+import { Icon } from "./navigation/Icon";
 
 type DraftQuestion = Omit<ApiExamQuestion, "question_id" | "section_id"> & { question_id: string };
 type DraftSection = Omit<ApiExamSection, "section_id" | "exam_id" | "questions"> & { section_id: string; questions: DraftQuestion[] };
@@ -47,7 +49,7 @@ function WhyLink({ reasonCode, reasonDescription, evidenceRows }: { reasonCode: 
   return (
     <div>
       <button onClick={() => setOpen((o) => !o)} className="text-[11px] text-agent underline">
-        Why? {open ? "▲" : "▼"}
+        Why? <Icon icon={getIcon(open ? "ChevronUp" : "ChevronDown")} size={12} tone="neutral" className="inline" />
       </button>
       {open && (
         <div className="mt-1 rounded-md border border-border-soft bg-background p-2 text-[11px]">
@@ -241,7 +243,7 @@ function QuestionEditor({ question, onChange, onDelete }: { question: DraftQuest
         />
         {question.source !== "MANUAL" && <span className="text-[10px] text-text-secondary">{question.source}</span>}
         <button onClick={onDelete} className="text-xs text-danger">
-          ✕
+          <Icon icon={getIcon("X")} size={14} tone="neutral" />
         </button>
       </div>
       {question.question_type === "MCQ" && (

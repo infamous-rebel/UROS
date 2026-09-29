@@ -9,6 +9,8 @@
 import { useState, useMemo, useCallback } from "react";
 import { useNeedsReviewQueue } from "../api/hooks";
 import { getToken, type CandidateSummary } from "../api/client";
+import { getIcon } from "./navigation/iconRegistry";
+import { Icon } from "./navigation/Icon";
 
 // ─── Filter chip categories ──────────────────────────────────────────
 type FilterCategory = "all" | "auto_fail" | "borderline" | "ocr_issue" | "verification" | "age";
@@ -256,7 +258,7 @@ function CandidateRow({
         <td className="py-2 pr-3">
           <div className="flex items-center gap-1">
             <span className={`text-xs text-text-secondary transition-transform ${isExpanded ? "rotate-90" : ""}`}>
-              ▶
+              <Icon icon={getIcon("Play")} size={10} tone="neutral" />
             </span>
             <div>
               <div className="font-medium text-text-primary">{c.full_name || "—"}</div>

@@ -1,9 +1,11 @@
 /**
- * Quest 05 Part 8b — Main sidebar container.
+ * Quest 05 Part 8b/8c — Main sidebar container.
  * Responsive: 240px expanded, 64px collapsed, drawer on mobile.
  */
 
 import { useState, useEffect } from "react";
+import { getIcon } from "./iconRegistry";
+import { Icon } from "./Icon";
 import type { NavItemId } from "../../config/navConfig";
 import { filterNavByRole } from "../../config/navConfig";
 import { NavGroup } from "./NavGroup";
@@ -39,7 +41,6 @@ export function Sidebar({
   const { user } = useAuth();
   const userRole = user?.role ?? "RECRUITER";
 
-  // Filter nav by role and apply badge overrides
   const navGroups = filterNavByRole(userRole).map((group) => ({
     ...group,
     items: group.items.map((item) => ({
@@ -48,27 +49,26 @@ export function Sidebar({
     })),
   }));
 
-  // Close mobile drawer on navigation
   useEffect(() => {
     if (mobileOpen) {
       onMobileClose();
     }
   }, [activeItem]);
 
-  // Get pinned items that exist in nav config
   const pinnedItems = navGroups
     .flatMap((g) => g.items)
     .filter((item) => pinned.includes(item.id));
 
-  // Get recent items that exist in nav config and aren't pinned
   const recentItems = navGroups
     .flatMap((g) => g.items)
     .filter((item) => recent.includes(item.id) && !pinned.includes(item.id))
     .slice(0, 5);
 
-  // Force expand on mobile when drawer is open
   const isCollapsed = mobileOpen ? false : collapsed;
   const sidebarWidth = isCollapsed ? "w-16" : "w-60";
+
+  const CollapseIcon = getIcon(isCollapsed ? "ChevronsRight" : "ChevronsLeft");
+  const StarIcon = getIcon("Star");
 
   return (
     <>
@@ -96,7 +96,7 @@ export function Sidebar({
             className="rounded p-1 text-text-secondary hover:bg-background hover:text-text-primary"
             title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            {isCollapsed ? "→" : "←"}
+            <Icon icon={CollapseIcon} size={18} tone="neutral" />
           </button>
         </div>
 
@@ -117,35 +117,39 @@ export function Sidebar({
           {pinnedItems.length > 0 && !searchQuery && (
             <div className="mb-3">
               {!isCollapsed && (
-                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
-                  ★ PINNED
+                <div className="flex items-center px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
+                  <Icon icon={StarIcon} size={10} tone="attention" className="mr-1" />
+                  PINNED
                 </div>
               )}
               <div className="space-y-0.5">
-                {pinnedItems.map((item) => (
-                  <div
-                    key={item.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => onItemClick(item.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        onItemClick(item.id);
-                      }
-                    }}
-                    className={`group relative flex cursor-pointer items-center rounded-md px-3 py-2 text-xs font-medium transition-colors ${
-                      activeItem === item.id
-                        ? "border-l-4 border-agent bg-agent/10 text-text-primary"
-                        : "text-text-secondary hover:bg-background hover:text-text-primary"
-                    }`}
-                  >
-                    <span className="flex-shrink-0 text-base">{item.icon}</span>
-                    {!isCollapsed && (
-                      <span className="ml-3 flex-1 truncate">{item.label}</span>
-                    )}
-                  </div>
-                ))}
+                {pinnedItems.map((item) => {
+                  const ItemIcon = getIcon(item.icon);
+                  return (
+                    <div
+                      key={item.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => onItemClick(item.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onItemClick(item.id);
+                        }
+                      }}
+                      className={`group relative flex cursor-pointer items-center rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+                        activeItem === item.id
+                          ? "border-l-4 border-agent bg-agent/10 text-text-primary"
+                          : "text-text-secondary hover:bg-background hover:text-text-primary"
+                      }`}
+                    >
+                      <Icon icon={ItemIcon} size={20} tone="neutral" className="flex-shrink-0" />
+                      {!isCollapsed && (
+                        <span className="ml-3 flex-1 truncate">{item.label}</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -159,30 +163,33 @@ export function Sidebar({
                 </div>
               )}
               <div className="space-y-0.5">
-                {recentItems.map((item) => (
-                  <div
-                    key={item.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => onItemClick(item.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        onItemClick(item.id);
-                      }
-                    }}
-                    className={`group relative flex cursor-pointer items-center rounded-md px-3 py-2 text-xs font-medium transition-colors ${
-                      activeItem === item.id
-                        ? "border-l-4 border-agent bg-agent/10 text-text-primary"
-                        : "text-text-secondary hover:bg-background hover:text-text-primary"
-                    }`}
-                  >
-                    <span className="flex-shrink-0 text-base">{item.icon}</span>
-                    {!isCollapsed && (
-                      <span className="ml-3 flex-1 truncate">{item.label}</span>
-                    )}
-                  </div>
-                ))}
+                {recentItems.map((item) => {
+                  const ItemIcon = getIcon(item.icon);
+                  return (
+                    <div
+                      key={item.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => onItemClick(item.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onItemClick(item.id);
+                        }
+                      }}
+                      className={`group relative flex cursor-pointer items-center rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+                        activeItem === item.id
+                          ? "border-l-4 border-agent bg-agent/10 text-text-primary"
+                          : "text-text-secondary hover:bg-background hover:text-text-primary"
+                      }`}
+                    >
+                      <Icon icon={ItemIcon} size={20} tone="neutral" className="flex-shrink-0" />
+                      {!isCollapsed && (
+                        <span className="ml-3 flex-1 truncate">{item.label}</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

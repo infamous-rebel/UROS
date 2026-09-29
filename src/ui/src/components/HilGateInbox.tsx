@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { usePendingGates, useResolveGate } from "../hooks/hooks_gates";
 import { getToken, type GateSummary } from "../api/client";
+import { getIcon } from "./navigation/iconRegistry";
+import { Icon } from "./navigation/Icon";
 
 const GATE_TIMEOUT_MS = 1000 * 60 * 60 * 24 * 30; // 30 days — matches env.schema.ts
 
@@ -168,7 +170,7 @@ export function HilGateInbox() {
           </span>
         </div>
         <div className="flex flex-1 flex-col items-center justify-center rounded-md border border-dashed border-border-soft py-10">
-          <div className="mb-2 text-3xl">✓</div>
+          <div className="mb-2 text-3xl"><Icon icon={getIcon("CircleCheck")} size={32} tone="system" className="mx-auto" /></div>
           <p className="text-sm font-medium text-success">No gates waiting for review.</p>
           <p className="mt-1 text-xs text-text-secondary">
             Pipeline is flowing — all decisions have been made.
