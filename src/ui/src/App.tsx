@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { CommandBar } from "./components/CommandBar";
 import { PipelineStrip } from "./components/PipelineStrip";
 import { DecisionQueue } from "./components/DecisionQueue";
@@ -28,6 +28,7 @@ import { TeletalkPanel } from "./components/TeletalkPanel";
 import { BrainStudio } from "./components/BrainStudio";
 import { Settings } from "./components/Settings";
 import { ReportsTab } from "./components/ReportsTab";
+import { VerificationCenter } from "./components/VerificationCenter";
 import { LoginScreen } from "./components/auth/LoginScreen";
 import { ForgotPasswordScreen } from "./components/auth/ForgotPasswordScreen";
 import { ResetPasswordScreen } from "./components/auth/ResetPasswordScreen";
@@ -35,7 +36,13 @@ import { ChangePasswordScreen } from "./components/auth/ChangePasswordScreen";
 import { SessionManager } from "./components/auth/SessionManager";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { I18nProvider, useI18n } from "./i18n";
+import { Sidebar } from "./components/navigation/Sidebar";
+import { Breadcrumb } from "./components/navigation/Breadcrumb";
+import { CommandPalette } from "./components/navigation/CommandPalette";
+import { useNavState } from "./components/navigation/useNavState";
+import type { NavItemId } from "./config/navConfig";
 
+// Legacy tab keys for backward compatibility
 const TABS = [
   { key: "recruitment", label: "Recruitment" },
   { key: "appeals", label: "Appeals" },
@@ -57,6 +64,7 @@ const TABS = [
   { key: "brain", label: "Brain Studio" },
   { key: "reports", label: "Reports" },
   { key: "settings", label: "Settings" },
+  { key: "verification", label: "Verification Center" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -164,67 +172,140 @@ function DashboardOverlay({ title, children }: { title: string; children: React.
   );
 }
 
+/** Quest 05 Part 8b — Dashboard with sidebar navigation. */
 function Dashboard() {
-  const [tab, setTab] = useState<TabKey>("recruitment");
+  const navState = useNavState();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false);
+  const [hilGateBadge, setHilGateBadge] = useState(0);
+
+  // Cmd+K keyboard shortcut
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setCmdPaletteOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Fetch pending HIL gates count for badge
+  useEffect(() => {
+    const fetchBadge = async () => {
+      try {
+        const { authedRequest } = await import("./api/client");
+        const res = await authedRequest<{ gates: unknown[] }>("/gates?status=pending&limit=100");
+        setHilGateBadge(res.gates?.length ?? 0);
+      } catch {
+        // Ignore errors
+      }
+    };
+    fetchBadge();
+    const interval = setInterval(fetchBadge, 30000); // Poll every 30s
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleNavigate = useCallback((id: NavItemId) => {
+    navState.setActiveItem(id);
+  }, [navState]);
+
+  // Map nav item to tab key (they're the same for most items)
+  const activeTab = navState.activeItem as TabKey;
 
   return (
-    <div className="flex h-screen flex-col bg-background">
-      <CommandBar />
+    <div className="flex h-screen bg-background">
+      {/* Sidebar */}
+      <Sidebar
+        activeItem={navState.activeItem}
+        collapsed={navState.collapsed}
+        pinned={navState.pinned}
+        recent={navState.recent}
+        onItemClick={handleNavigate}
+        onPin={navState.togglePinned}
+        onToggleCollapse={navState.toggleCollapsed}
+        mobileOpen={mobileMenuOpen}
+        onMobileClose={() => setMobileMenuOpen(false)}
+        badgeOverrides={{ gates: hilGateBadge }}
+      />
 
-      <div className="flex items-center gap-1 border-b border-border-soft bg-surface px-6 py-2">
-        {TABS.map((t) => (
+      {/* Main content area */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* CommandBar */}
+        <CommandBar />
+
+        {/* Mobile hamburger + Breadcrumb */}
+        <div className="flex items-center gap-3 border-b border-border-soft bg-surface px-4 py-2 lg:px-6">
+          {/* Mobile hamburger */}
           <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`rounded-md px-3 py-1.5 text-xs font-medium ${
-              tab === t.key ? "bg-agent text-white" : "text-text-secondary hover:bg-background"
-            }`}
+            onClick={() => setMobileMenuOpen(true)}
+            className="rounded p-1 text-text-secondary hover:bg-background hover:text-text-primary lg:hidden"
+            aria-label="Open menu"
           >
-            {t.label}
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
           </button>
-        ))}
-      </div>
 
-      <div className="flex flex-1 gap-4 overflow-hidden p-4">
-        <div className="flex flex-1 flex-col gap-4 overflow-auto">
-          {tab === "recruitment" && (
-            <>
-              <PipelineStrip />
-              <div className="flex-1 overflow-hidden">
-                <DecisionQueue />
-              </div>
-            </>
-          )}
-          {tab === "appeals" && <PanelCard title="Appeals"><AppealsPanel /></PanelCard>}
-          {tab === "tasks" && <PanelCard title="Task Logs"><TaskLogsPanel /></PanelCard>}
-          {tab === "onboarding" && <PanelCard title="Onboarding"><OnboardingPanel /></PanelCard>}
-          {tab === "kpi" && <PanelCard title="KPI Scores"><KpiPanel /></PanelCard>}
-          {tab === "personas" && <PanelCard title="Departmental Personas"><PersonasPanel /></PanelCard>}
-          {tab === "improvements" && <PanelCard title="Improvement Advisor"><ImprovementsPanel /></PanelCard>}
-          {tab === "dimensions" && <PanelCard title="7-Dimension Candidate Matching"><DimensionScorecard /></PanelCard>}
-          {tab === "mcq" && <PanelCard title="Paper-Based MCQ Scanner"><McqScannerPanel /></PanelCard>}
-          {tab === "exams" && <PanelCard title="Digital Exam Paper Creator"><DigitalExamBuilder /></PanelCard>}
-          {tab === "fraud" && <PanelCard title="Fraud & Inconsistency Detection"><FraudDetectionPanel /></PanelCard>}
-          {tab === "references" && <PanelCard title="Automated Reference Checking"><ReferenceCheckPanel /></PanelCard>}
-          {tab === "analytics" && <PanelCard title="Recruitment Analytics & Source Effectiveness"><RecruitmentAnalyticsPanel /></PanelCard>}
-          {tab === "offboarding" && <PanelCard title="Offboarding & Exit Management"><OffboardingPanel /></PanelCard>}
-          {tab === "rediscovery" && <PanelCard title="Candidate Rediscovery / Talent Pool Re-engagement"><RediscoveryPanel /></PanelCard>}
-          {tab === "gates" && <PanelCard title="Human-in-the-Loop Gate Inbox"><HilGateInbox /></PanelCard>}
-          {tab === "intake" && <IntakeSection />}
-          {tab === "brain" && <PanelCard title="Brain Studio — Rule Pack Editor"><BrainStudio /></PanelCard>}
-          {tab === "reports" && <PanelCard title="Reports"><ReportsTab /></PanelCard>}
-          {tab === "settings" && <PanelCard title="Settings"><Settings /></PanelCard>}
+          {/* Breadcrumb */}
+          <Breadcrumb activeItem={navState.activeItem} onItemClick={handleNavigate} />
         </div>
 
-        {/* Audit & reports sidebar: what the platform did, and whether any
-            agent was shedding or retrying work while it did it. */}
-        <div className="flex w-80 flex-shrink-0 flex-col gap-4 overflow-hidden">
-          <AgentHealth />
-          <div className="min-h-0 flex-1">
-            <AuditStream />
+        {/* Main panel with content */}
+        <div className="flex flex-1 gap-4 overflow-hidden p-4">
+          <div className="flex flex-1 flex-col gap-4 overflow-auto">
+            {activeTab === "recruitment" && (
+              <>
+                <PipelineStrip />
+                <div className="flex-1 overflow-hidden">
+                  <DecisionQueue />
+                </div>
+              </>
+            )}
+            {activeTab === "appeals" && <PanelCard title="Appeals"><AppealsPanel /></PanelCard>}
+            {activeTab === "tasks" && <PanelCard title="Task Logs"><TaskLogsPanel /></PanelCard>}
+            {activeTab === "onboarding" && <PanelCard title="Onboarding"><OnboardingPanel /></PanelCard>}
+            {activeTab === "kpi" && <PanelCard title="KPI Scores"><KpiPanel /></PanelCard>}
+            {activeTab === "personas" && <PanelCard title="Departmental Personas"><PersonasPanel /></PanelCard>}
+            {activeTab === "improvements" && <PanelCard title="Improvement Advisor"><ImprovementsPanel /></PanelCard>}
+            {activeTab === "dimensions" && <PanelCard title="7-Dimension Candidate Matching"><DimensionScorecard /></PanelCard>}
+            {activeTab === "mcq" && <PanelCard title="Paper-Based MCQ Scanner"><McqScannerPanel /></PanelCard>}
+            {activeTab === "exams" && <PanelCard title="Digital Exam Paper Creator"><DigitalExamBuilder /></PanelCard>}
+            {activeTab === "fraud" && <PanelCard title="Fraud & Inconsistency Detection"><FraudDetectionPanel /></PanelCard>}
+            {activeTab === "references" && <PanelCard title="Automated Reference Checking"><ReferenceCheckPanel /></PanelCard>}
+            {activeTab === "analytics" && <PanelCard title="Recruitment Analytics & Source Effectiveness"><RecruitmentAnalyticsPanel /></PanelCard>}
+            {activeTab === "offboarding" && <PanelCard title="Offboarding & Exit Management"><OffboardingPanel /></PanelCard>}
+            {activeTab === "rediscovery" && <PanelCard title="Candidate Rediscovery / Talent Pool Re-engagement"><RediscoveryPanel /></PanelCard>}
+            {activeTab === "gates" && (
+              <PanelCard title="Human-in-the-Loop Gate Inbox">
+                <HilGateInbox />
+              </PanelCard>
+            )}
+            {activeTab === "intake" && <IntakeSection />}
+            {activeTab === "brain" && <PanelCard title="Brain Studio — Rule Pack Editor"><BrainStudio /></PanelCard>}
+            {activeTab === "reports" && <PanelCard title="Reports"><ReportsTab /></PanelCard>}
+            {activeTab === "settings" && <PanelCard title="Settings"><Settings /></PanelCard>}
+            {activeTab === "verification" && <PanelCard title="Verification Center"><VerificationCenter /></PanelCard>}
+          </div>
+
+          {/* Audit & reports sidebar: what the platform did, and whether any
+              agent was shedding or retrying work while it did it. */}
+          <div className="hidden w-80 flex-shrink-0 flex-col gap-4 overflow-hidden xl:flex">
+            <AgentHealth />
+            <div className="min-h-0 flex-1">
+              <AuditStream />
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Command Palette (Cmd+K) */}
+      <CommandPalette
+        open={cmdPaletteOpen}
+        onClose={() => setCmdPaletteOpen(false)}
+        onNavigate={handleNavigate}
+      />
     </div>
   );
 }

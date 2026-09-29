@@ -96,3 +96,17 @@ jobs:
             exit 1
           fi
           echo "PASS: every file endpoint has UI consumers"
+
+      - name: Guard — every route in navConfig is reachable
+        run: |
+          # Count tabs rendered in App.tsx (activeTab === "xxx" patterns)
+          tabs=$(grep -c 'activeTab === "' src/ui/src/App.tsx || true)
+          # Count nav items in navConfig.ts (id: "xxx" patterns)
+          navItems=$(grep -c 'id: "' src/ui/src/config/navConfig.ts || true)
+          echo "Tabs in App.tsx: $tabs"
+          echo "Nav items in navConfig.ts: $navItems"
+          if [ "$navItems" -lt "$tabs" ]; then
+            echo "FAIL: navConfig has $navItems items, App.tsx has $tabs tabs"
+            exit 1
+          fi
+          echo "PASS: every tab is reachable via navConfig"
