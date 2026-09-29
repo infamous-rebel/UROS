@@ -26,6 +26,7 @@ import { EmailIntakePanel } from "./components/EmailIntakePanel";
 import { BdjobsPanel } from "./components/BdjobsPanel";
 import { TeletalkPanel } from "./components/TeletalkPanel";
 import { BrainStudio } from "./components/BrainStudio";
+import { Settings } from "./components/Settings";
 import { LoginScreen } from "./components/auth/LoginScreen";
 import { ForgotPasswordScreen } from "./components/auth/ForgotPasswordScreen";
 import { ResetPasswordScreen } from "./components/auth/ResetPasswordScreen";
@@ -53,6 +54,7 @@ const TABS = [
   { key: "gates", label: "HIL Gates" },
   { key: "intake", label: "Intake" },
   { key: "brain", label: "Brain Studio" },
+  { key: "settings", label: "Settings" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -208,6 +210,7 @@ function Dashboard() {
           {tab === "gates" && <PanelCard title="Human-in-the-Loop Gate Inbox"><HilGateInbox /></PanelCard>}
           {tab === "intake" && <IntakeSection />}
           {tab === "brain" && <PanelCard title="Brain Studio — Rule Pack Editor"><BrainStudio /></PanelCard>}
+          {tab === "settings" && <PanelCard title="Settings"><Settings /></PanelCard>}
         </div>
 
         {/* Audit & reports sidebar: what the platform did, and whether any
