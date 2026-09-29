@@ -236,6 +236,17 @@ After every commit, immediately run `git push origin main`. Never leave commits 
 
 This ensures that remote state matches local state at all times. If a local disk failure occurs, no work is lost. CI feedback is available within minutes, not hours.
 
+### Rule 21 — Visual evidence must be distinct
+
+When producing screenshot evidence, every screenshot must show a distinct UI state. Verify with `cmp file1 file2` before declaring complete. Identical file sizes are treated as duplicates and rejected.
+
+Before declaring any screenshot batch complete:
+1. Run `ls -la <directory>/*.png | awk '{print $5, $9}'` — every file size must be unique.
+2. Run `cmp` on any pairs that were previously duplicated — all must show distinct content.
+3. If any pair is identical, the screenshot script is broken — fix the state manipulation, not the file.
+
+This ensures that evidence actually demonstrates different UI states (expanded vs collapsed, drawer open vs scrolled, health live vs sidebar scroll). Two screenshots proving different behaviors cannot be byte-identical.
+
 
 ---
 

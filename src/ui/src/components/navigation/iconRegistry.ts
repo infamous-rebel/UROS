@@ -40,11 +40,7 @@ const ICON_NAMES = [
   "ChevronDown",
   "ChevronUp",
   "X",
-  "Menu",
-  "Pin",
-  "Clock",
   "Command",
-  "Download",
   "Check",
   // Settings tab icons
   "User",
@@ -66,7 +62,6 @@ const ICON_NAMES = [
   "Phone",
   "AlertTriangle",
   "Play",
-  "Circle",
   "Copy",
 ] as const;
 
