@@ -111,8 +111,9 @@ export function Sidebar({
           </div>
         )}
 
-        {/* Navigation content */}
-        <div className="flex-1 overflow-y-auto p-2">
+        {/* Navigation content with subtle scroll indicator */}
+        <div className="relative flex-1 overflow-hidden">
+          <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-border-soft scrollbar-track-transparent p-2">
           {/* Pinned section */}
           {pinnedItems.length > 0 && !searchQuery && (
             <div className="mb-3">
@@ -154,45 +155,8 @@ export function Sidebar({
             </div>
           )}
 
-          {/* Recent section (shown when no pinned) */}
-          {pinnedItems.length === 0 && recentItems.length > 0 && !searchQuery && (
-            <div className="mb-3">
-              {!isCollapsed && (
-                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
-                  RECENT
-                </div>
-              )}
-              <div className="space-y-0.5">
-                {recentItems.map((item) => {
-                  const ItemIcon = getIcon(item.icon);
-                  return (
-                    <div
-                      key={item.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => onItemClick(item.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          onItemClick(item.id);
-                        }
-                      }}
-                      className={`group relative flex cursor-pointer items-center rounded-md px-3 py-2 text-xs font-medium transition-colors ${
-                        activeItem === item.id
-                          ? "border-l-4 border-agent bg-agent/10 text-text-primary"
-                          : "text-text-secondary hover:bg-background hover:text-text-primary"
-                      }`}
-                    >
-                      <Icon icon={ItemIcon} size={20} tone="neutral" className="flex-shrink-0" />
-                      {!isCollapsed && (
-                        <span className="ml-3 flex-1 truncate">{item.label}</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          {/* Recent section removed — items already visible in nav groups below */}
+          {/* Pinned section remains for user favorites */}
 
           {/* Nav groups */}
           {navGroups.map((group) => (
@@ -207,6 +171,7 @@ export function Sidebar({
               onItemPin={onPin}
             />
           ))}
+          </div>
         </div>
 
         {/* Footer - user info (hidden when collapsed) */}

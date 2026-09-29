@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useHealth } from "../api/hooks";
 import { getToken, setToken, clearToken, authedRequest, getAccessToken } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
@@ -14,10 +14,21 @@ const DEV_AUTH_ENABLED =
   Boolean((import.meta as any).env?.DEV) && (import.meta as any).env?.VITE_DEV_AUTH_ENABLED === "true";
 
 export function CommandBar() {
-  const { data: health, isError } = useHealth();
+  const { data: health, isError, isLoading } = useHealth();
   const { user, signOut } = useAuth();
   const [tokenInput, setTokenInput] = useState("");
   const { t } = useI18n();
+  const [timedOut, setTimedOut] = useState(false);
+
+  // Show "unreachable" after 5 seconds if still loading
+  useEffect(() => {
+    if (isLoading) {
+      const timer = setTimeout(() => setTimedOut(true), 5000);
+      return () => clearTimeout(timer);
+    } else {
+      setTimedOut(false);
+    }
+  }, [isLoading]);
 
   function applyToken() {
     if (!tokenInput.trim()) return;
@@ -37,8 +48,8 @@ export function CommandBar() {
     });
   }
 
-  const statusColor = isError ? "bg-danger" : health?.status === "ok" ? "bg-success" : "bg-attention";
-  const statusLabel = isError ? t("status.unreachable") : health?.status === "ok" ? t("status.live") : t("status.checking");
+  const statusColor = isError || timedOut ? "bg-danger" : health?.status === "ok" ? "bg-success" : "bg-attention";
+  const statusLabel = isError || timedOut ? t("status.unreachable") : health?.status === "ok" ? t("status.live") : t("status.checking");
 
   return (
     <div className="flex items-center justify-between gap-4 border-b border-border-soft bg-surface px-6 py-3">

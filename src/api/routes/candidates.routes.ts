@@ -532,13 +532,20 @@ router.get(
 
       // Build real ZIP from actual files
       const zip = new AdmZip();
+      let filesAdded = 0;
       for (const doc of docs.rows) {
         const filePath = doc.file_location;
         if (fs.existsSync(filePath)) {
           const ext = path.extname(filePath) || ".bin";
           const fileName = `${doc.doc_type}-${doc.doc_id}${ext}`;
           zip.addLocalFile(filePath, "", fileName);
+          filesAdded++;
         }
+      }
+
+      if (filesAdded === 0) {
+        res.status(404).json({ error: "No documents to download" });
+        return;
       }
 
       const zipBuffer = zip.toBuffer();

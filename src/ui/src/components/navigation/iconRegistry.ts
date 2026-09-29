@@ -77,7 +77,8 @@ export const ICON_REGISTRY: Record<string, LucideIcon> = {};
 
 for (const name of ICON_NAMES) {
   const component = (LucideIcons as Record<string, unknown>)[name];
-  if (typeof component === "function") {
+  // Lucide icons are forwardRef objects (typeof "object"), not plain functions
+  if (component && (typeof component === "function" || typeof component === "object")) {
     ICON_REGISTRY[name] = component as LucideIcon;
   }
 }
