@@ -23,6 +23,7 @@ import auditRoutes from "./routes/audit.routes";
 import reportsRoutes from "./routes/reports.routes";
 import appealsRoutes from "./routes/appeals.routes";
 import rulesRoutes from "./routes/rules.routes";
+import rulePacksRoutes from "./routes/rule_packs.routes";
 import webhooksRoutes from "./routes/webhooks.routes";
 import credentialsRoutes from "./routes/credentials.routes";
 import taskLogsRoutes from "./routes/task_logs.routes";
@@ -134,6 +135,7 @@ export function createApp(): Express {
   v1.use("/reports", reportsRoutes);
   v1.use("/appeals", appealsRoutes);
   v1.use("/rules", rulesRoutes);
+  v1.use("/rule-packs", rulePacksRoutes);
   v1.use("/credentials", credentialsRoutes);
   v1.use("/task-logs", taskLogsRoutes);
   v1.use("/onboarding", onboardingRoutes);

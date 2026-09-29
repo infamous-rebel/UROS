@@ -25,6 +25,7 @@ import { CandidateIntakePanel } from "./components/CandidateIntakePanel";
 import { EmailIntakePanel } from "./components/EmailIntakePanel";
 import { BdjobsPanel } from "./components/BdjobsPanel";
 import { TeletalkPanel } from "./components/TeletalkPanel";
+import { BrainStudio } from "./components/BrainStudio";
 import { LoginScreen } from "./components/auth/LoginScreen";
 import { ForgotPasswordScreen } from "./components/auth/ForgotPasswordScreen";
 import { ResetPasswordScreen } from "./components/auth/ResetPasswordScreen";
@@ -51,6 +52,7 @@ const TABS = [
   { key: "rediscovery", label: "Candidate Rediscovery" },
   { key: "gates", label: "HIL Gates" },
   { key: "intake", label: "Intake" },
+  { key: "brain", label: "Brain Studio" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -205,6 +207,7 @@ function Dashboard() {
           {tab === "rediscovery" && <PanelCard title="Candidate Rediscovery / Talent Pool Re-engagement"><RediscoveryPanel /></PanelCard>}
           {tab === "gates" && <PanelCard title="Human-in-the-Loop Gate Inbox"><HilGateInbox /></PanelCard>}
           {tab === "intake" && <IntakeSection />}
+          {tab === "brain" && <PanelCard title="Brain Studio — Rule Pack Editor"><BrainStudio /></PanelCard>}
         </div>
 
         {/* Audit & reports sidebar: what the platform did, and whether any

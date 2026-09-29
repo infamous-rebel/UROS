@@ -151,6 +151,7 @@ router.post(
       );
 
       await logAudit({
+        org_id: req.user!.org_id,
         entity_type: "RULE",
         entity_id: result.rows[0].rule_id,
         agent_or_user: req.user!.user_id,
@@ -217,6 +218,7 @@ router.patch(
       );
 
       await logAudit({
+        org_id: req.user!.org_id,
         entity_type: "RULE",
         entity_id: id,
         agent_or_user: req.user!.user_id,
