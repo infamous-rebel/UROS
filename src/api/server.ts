@@ -47,6 +47,7 @@ import authRoutes from "./routes/auth.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import notificationsRoutes from "./routes/notifications.routes";
 import searchRoutes from "./routes/search.routes";
+import intakeRoutes from "./routes/intake.routes";
 
 /**
  * Global, generous defense-in-depth rate limit applied to every request
@@ -177,6 +178,8 @@ export function createApp(): Express {
   v1.use("/dashboard", dashboardRoutes);
   v1.use("/notifications", notificationsRoutes);
   v1.use("/search", searchRoutes);
+  // Quest 05 Part 5: Intake — CV upload, CSV import, email import, Bdjobs/Teletalk status.
+  v1.use("/intake", intakeRoutes);
 
   app.use("/api/v1", v1);
 

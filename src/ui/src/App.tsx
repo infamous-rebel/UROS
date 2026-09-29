@@ -21,6 +21,10 @@ import { RecruitmentAnalyticsPanel } from "./components/RecruitmentAnalyticsPane
 import { OffboardingPanel } from "./components/OffboardingPanel";
 import { RediscoveryPanel } from "./components/RediscoveryPanel";
 import { HilGateInbox } from "./components/HilGateInbox";
+import { CandidateIntakePanel } from "./components/CandidateIntakePanel";
+import { EmailIntakePanel } from "./components/EmailIntakePanel";
+import { BdjobsPanel } from "./components/BdjobsPanel";
+import { TeletalkPanel } from "./components/TeletalkPanel";
 import { LoginScreen } from "./components/auth/LoginScreen";
 import { ForgotPasswordScreen } from "./components/auth/ForgotPasswordScreen";
 import { ResetPasswordScreen } from "./components/auth/ResetPasswordScreen";
@@ -46,6 +50,7 @@ const TABS = [
   { key: "offboarding", label: "Offboarding" },
   { key: "rediscovery", label: "Candidate Rediscovery" },
   { key: "gates", label: "HIL Gates" },
+  { key: "intake", label: "Intake" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -199,6 +204,7 @@ function Dashboard() {
           {tab === "offboarding" && <PanelCard title="Offboarding & Exit Management"><OffboardingPanel /></PanelCard>}
           {tab === "rediscovery" && <PanelCard title="Candidate Rediscovery / Talent Pool Re-engagement"><RediscoveryPanel /></PanelCard>}
           {tab === "gates" && <PanelCard title="Human-in-the-Loop Gate Inbox"><HilGateInbox /></PanelCard>}
+          {tab === "intake" && <IntakeSection />}
         </div>
 
         {/* Audit & reports sidebar: what the platform did, and whether any
@@ -219,6 +225,39 @@ function PanelCard({ title, children }: { title: string; children: React.ReactNo
     <div className="rounded-lg border border-border-soft bg-surface p-4">
       <h2 className="mb-3 text-sm font-semibold text-text-primary">{title}</h2>
       {children}
+    </div>
+  );
+}
+
+/** Quest 05 Part 5 — Intake section with sub-tabs for each source. */
+function IntakeSection() {
+  const [subTab, setSubTab] = useState<"candidates" | "email" | "bdjobs" | "teletalk">("candidates");
+  const subTabs = [
+    { key: "candidates" as const, label: "CV / CSV" },
+    { key: "email" as const, label: "Email" },
+    { key: "bdjobs" as const, label: "Bdjobs" },
+    { key: "teletalk" as const, label: "Teletalk" },
+  ];
+  return (
+    <div className="rounded-lg border border-border-soft bg-surface p-4">
+      <h2 className="mb-3 text-sm font-semibold text-text-primary">Candidate Intake</h2>
+      <div className="mb-3 flex gap-1">
+        {subTabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setSubTab(t.key)}
+            className={`rounded px-3 py-1.5 text-xs font-medium ${
+              subTab === t.key ? "bg-agent text-white" : "text-text-secondary hover:bg-background"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {subTab === "candidates" && <CandidateIntakePanel />}
+      {subTab === "email" && <EmailIntakePanel />}
+      {subTab === "bdjobs" && <BdjobsPanel />}
+      {subTab === "teletalk" && <TeletalkPanel />}
     </div>
   );
 }
