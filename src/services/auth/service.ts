@@ -202,6 +202,9 @@ export async function login(email: string, password: string, ip: string | null, 
     output_value: { session_id: sessionId },
   });
 
+  // Update last_login_at on every successful sign-in
+  await db.query(`UPDATE users SET last_login_at = now() WHERE user_id = $1`, [user.user_id]);
+
   return { access_token, expires_in: ACCESS_TOKEN_TTL_SECONDS, refresh_token: refreshToken, user: { ...userRowToInfo(user), org_id: activeOrgId } };
 }
 

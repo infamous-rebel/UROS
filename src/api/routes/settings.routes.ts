@@ -165,7 +165,7 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const users = await db.query(
-        `SELECT user_id, full_name, email, phone, role, preferred_language, active, created_at
+        `SELECT user_id, full_name, email, phone, role, preferred_language, active, last_login_at, created_at
          FROM users WHERE org_id = $1 ORDER BY created_at DESC`,
         [req.user!.org_id]
       );
@@ -382,7 +382,68 @@ router.patch(
 
 // ─── Data Export ──────────────────────────────────────────────────────
 
-const exportJobs = new Map<string, { id: string; org_id: string; status: string; requested_at: string; requested_by: string }>();
+const EXPORT_DIR = process.env.BACKUP_OUTPUT_DIR || "/tmp/uros-backups";
+
+interface ExportJob {
+  id: string;
+  org_id: string;
+  status: string;
+  requested_at: string;
+  requested_by: string;
+  file_path?: string;
+  file_size?: number;
+}
+
+const exportJobs = new Map<string, ExportJob>();
+
+async function runExportWorker(job: ExportJob): Promise<void> {
+  try {
+    if (!fs.existsSync(EXPORT_DIR)) fs.mkdirSync(EXPORT_DIR, { recursive: true });
+
+    // Gather org data
+    const [candidates, evaluations, auditLogs, org] = await Promise.all([
+      db.query(`SELECT * FROM candidates WHERE org_id = $1`, [job.org_id]),
+      db.query(`SELECT * FROM evaluation_results WHERE org_id = $1`, [job.org_id]).catch(() => ({ rows: [] })),
+      db.query(`SELECT * FROM audit_log WHERE org_id = $1 ORDER BY created_at DESC LIMIT 10000`, [job.org_id]),
+      db.query(`SELECT * FROM organizations WHERE org_id = $1`, [job.org_id]),
+    ]);
+
+    // Rules via rule_pack_versions (optional — may not exist for all orgs)
+    let rules: { rows: any[] } = { rows: [] };
+    try {
+      rules = await db.query(
+        `SELECT r.* FROM rules r
+         JOIN rule_pack_versions rpv ON r.rule_pack_version_id = rpv.version_id
+         JOIN rule_packs rp ON rpv.rule_pack_id = rp.rule_pack_id
+         WHERE rp.org_id = $1`,
+        [job.org_id]
+      );
+    } catch { /* no rules */ }
+
+    const exportData = {
+      metadata: { exported_at: new Date().toISOString(), org_id: job.org_id, org_name: org.rows[0]?.name },
+      candidates: candidates.rows,
+      rules: rules.rows,
+      evaluations: evaluations.rows,
+      audit_log: auditLogs.rows,
+    };
+
+    const filename = `uros-export-${job.id}.json`;
+    const filepath = path.join(EXPORT_DIR, filename);
+    fs.writeFileSync(filepath, JSON.stringify(exportData, null, 2));
+    const stats = fs.statSync(filepath);
+
+    const j = exportJobs.get(job.id);
+    if (j) {
+      j.status = "READY";
+      j.file_path = filepath;
+      j.file_size = stats.size;
+    }
+  } catch (err) {
+    const j = exportJobs.get(job.id);
+    if (j) j.status = "FAILED";
+  }
+}
 
 router.post(
   "/data-export/request",
@@ -391,7 +452,7 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const id = `export-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      const job = {
+      const job: ExportJob = {
         id,
         org_id: req.user!.org_id,
         status: "PENDING",
@@ -408,11 +469,8 @@ router.post(
         action: "DATA_EXPORT_REQUESTED",
       });
 
-      // Simulate async completion
-      setTimeout(() => {
-        const j = exportJobs.get(id);
-        if (j) j.status = "READY";
-      }, 5000);
+      // Run the export worker asynchronously (simulates background processing)
+      setTimeout(() => runExportWorker(job), 3000);
 
       res.status(201).json({ export: job });
     } catch (err) { next(err); }
@@ -431,6 +489,33 @@ router.get(
         return;
       }
       res.status(200).json({ export: job });
+    } catch (err) { next(err); }
+  }
+);
+
+router.get(
+  "/data-export/download/:id",
+  authenticate,
+  rbac("ADMIN"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const job = exportJobs.get(req.params.id);
+      if (!job || job.status !== "READY" || !job.file_path) {
+        res.status(404).json({ error: "Export not ready" });
+        return;
+      }
+      if (!fs.existsSync(job.file_path)) {
+        res.status(404).json({ error: "Export file not found" });
+        return;
+      }
+      await logAudit({
+        org_id: req.user!.org_id,
+        entity_type: "DATA_EXPORT",
+        entity_id: req.params.id,
+        agent_or_user: req.user!.user_id,
+        action: "DATA_EXPORT_DOWNLOADED",
+      });
+      res.download(job.file_path);
     } catch (err) { next(err); }
   }
 );

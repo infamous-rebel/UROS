@@ -342,7 +342,7 @@ function UsersTab() {
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-border-soft text-xs uppercase text-text-secondary">
-              <th className="pb-2">Name</th><th className="pb-2">Email</th><th className="pb-2">Role</th><th className="pb-2">Status</th><th className="pb-2 text-right">Actions</th>
+              <th className="pb-2">Name</th><th className="pb-2">Email</th><th className="pb-2">Role</th><th className="pb-2">Last Login</th><th className="pb-2 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -351,7 +351,7 @@ function UsersTab() {
                 <td className="py-2 text-text-primary">{u.full_name}</td>
                 <td className="py-2 text-text-secondary">{u.email}</td>
                 <td className="py-2"><span className="rounded bg-agent/10 px-1.5 py-0.5 text-xs text-agent">{u.role}</span></td>
-                <td className="py-2"><span className={`rounded px-1.5 py-0.5 text-xs ${u.active !== false ? "bg-success/10 text-success" : "bg-human/10 text-human"}`}>{u.active !== false ? "Active" : "Inactive"}</span></td>
+                <td className="py-2 text-xs text-text-secondary">{u.last_login_at ? new Date(u.last_login_at).toLocaleString() : "Never"}</td>
                 <td className="py-2 text-right">
                   <button onClick={() => handleDeactivate(u.user_id)} className="text-xs text-human hover:underline">Deactivate</button>
                 </td>
@@ -413,6 +413,10 @@ function CredentialsTab() {
 function FallbackTab() {
   const [chains, setChains] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -433,23 +437,59 @@ function FallbackTab() {
 
   if (loading) return <p className="text-sm text-text-secondary">Loading fallback chains…</p>;
 
+  function startEdit(type: string) {
+    setEditing(type);
+    setEditValue((chains[type] ?? []).join(", "));
+  }
+
+  async function handleSave(type: string) {
+    setSaving(true);
+    try {
+      const provider_order = editValue.split(",").map((s) => s.trim()).filter(Boolean);
+      await authedRequest(`${API_V1}/integrations/fallback/${type}`, {
+        method: "PUT",
+        body: JSON.stringify({ provider_order }),
+      });
+      setEditing(null);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      await load();
+    } catch { /* */ } finally { setSaving(false); }
+  }
+
   return (
     <div>
-      <SectionTitle title="Fallback Chains" description="Ordered provider lists for each message type (ADMIN only)" />
+      <SectionTitle title="Fallback Chains" description="Ordered provider lists for each message type (ADMIN only). Comma-separated provider names." />
+      {saved && <p className="mb-2 text-xs text-success">✓ Chain saved</p>}
       {(["SMS", "EMAIL", "WHATSAPP"] as const).map((type) => (
         <div key={type} className="mb-4 rounded-lg border border-border-soft bg-background p-3">
-          <h4 className="mb-2 text-xs font-semibold text-text-primary">{type} Chain</h4>
-          {chains[type]?.length === 0 || !chains[type] ? (
-            <p className="text-xs text-text-secondary">No providers configured. Add credentials first.</p>
-          ) : (
-            <div className="flex items-center gap-2">
-              {chains[type].map((p, i) => (
-                <div key={i} className="flex items-center gap-1">
-                  <span className="rounded bg-agent/10 px-2 py-1 text-xs font-medium text-agent">{p}</span>
-                  {i < chains[type].length - 1 && <span className="text-text-secondary">→</span>}
-                </div>
-              ))}
+          <div className="mb-2 flex items-center justify-between">
+            <h4 className="text-xs font-semibold text-text-primary">{type} Chain</h4>
+            {editing !== type && (
+              <button onClick={() => startEdit(type)} className="text-xs text-agent hover:underline">Edit</button>
+            )}
+          </div>
+          {editing === type ? (
+            <div>
+              <input value={editValue} onChange={(e) => setEditValue(e.target.value)} className={inputClass} placeholder="provider1, provider2, …" />
+              <div className="mt-2 flex gap-2">
+                <SaveButton onClick={() => handleSave(type)} saving={saving} label="Save Chain" />
+                <button onClick={() => setEditing(null)} className="text-xs text-text-secondary hover:text-text-primary">Cancel</button>
+              </div>
             </div>
+          ) : (
+            chains[type]?.length === 0 || !chains[type] ? (
+              <p className="text-xs text-text-secondary">No providers configured. Add credentials first.</p>
+            ) : (
+              <div className="flex items-center gap-2">
+                {chains[type].map((p, i) => (
+                  <div key={i} className="flex items-center gap-1">
+                    <span className="rounded bg-agent/10 px-2 py-1 text-xs font-medium text-agent">{p}</span>
+                    {i < chains[type].length - 1 && <span className="text-text-secondary">→</span>}
+                  </div>
+                ))}
+              </div>
+            )
           )}
         </div>
       ))}
