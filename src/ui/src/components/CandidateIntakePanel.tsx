@@ -5,9 +5,7 @@
  * column mapping UI, preview, validation errors, and import button.
  */
 import { useState, useRef, useCallback } from "react";
-import { getToken } from "../api/client";
-
-const API_V1 = "/api/v1";
+import { getToken, API_V1 } from "../api/client";
 
 interface ImportResult {
   batch_id: string;

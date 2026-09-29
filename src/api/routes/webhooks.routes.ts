@@ -79,7 +79,7 @@ router.post(
       }
 
       try {
-        await routeToHandler(connector, parsedPayload);
+        await routeToHandler(connector, parsedPayload, orgId);
         await db.query(`UPDATE inbound_webhook_events SET processed=true WHERE event_id=$1`, [eventId]);
       } catch (handlerErr) {
         const message = handlerErr instanceof Error ? handlerErr.message : String(handlerErr);
@@ -97,7 +97,7 @@ router.post(
   }
 );
 
-async function routeToHandler(connector: string, payload: unknown): Promise<void> {
+async function routeToHandler(connector: string, payload: unknown, orgId?: string): Promise<void> {
   switch (connector) {
     case "whatsapp_business":
       // Meta's actual payload shape is nested; production code should
@@ -108,16 +108,50 @@ async function routeToHandler(connector: string, payload: unknown): Promise<void
       return;
     case "sms_provider":
     case "teletalk":
-    case "bdjobs":
     case "linkedin":
     case "email":
     case "calendar":
       // No specific handling wired yet for these connectors' inbound
       // events in this reference implementation — logged above regardless.
       return;
+    case "bdjobs":
+      await handleBdjobsWebhook(payload, orgId);
+      return;
     default:
       return;
   }
+}
+
+/**
+ * Handle a Bdjobs ATS webhook payload — extract applicant data and
+ * create candidate records.
+ */
+async function handleBdjobsWebhook(payload: unknown, orgId: string | undefined): Promise<void> {
+  if (!orgId || typeof payload !== "object" || payload === null) return;
+  const p = payload as Record<string, unknown>;
+
+  // Expected payload: { applicant: { name, email, phone, circular_id } }
+  const applicant = (p.applicant ?? p) as Record<string, unknown>;
+  const name = String(applicant.name ?? "Bdjobs Webhook Applicant");
+  const email = applicant.email ? String(applicant.email) : null;
+  const phone = applicant.phone ? String(applicant.phone) : null;
+  const circularId = applicant.circular_id ? String(applicant.circular_id) : `bdjobs-wh-${Date.now()}`;
+
+  const candidateId = `BDJWH-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  await db.query(
+    `INSERT INTO candidates (candidate_id, org_id, full_name, email, phone_primary, source_platform, job_circular_id, status)
+     VALUES ($1,$2,$3,$4,$5,'bdjobs',$6,'INTAKE')`,
+    [candidateId, orgId, name, email, phone, circularId]
+  );
+
+  await logAudit({
+    org_id: orgId,
+    entity_type: "CANDIDATE",
+    entity_id: candidateId,
+    agent_or_user: "bdjobsWebhook",
+    action: "BDJOBS_WEBHOOK_CANDIDATE_CREATED",
+    output_value: { name, email, circular_id: circularId },
+  });
 }
 
 function isDeliveryStatusPayload(

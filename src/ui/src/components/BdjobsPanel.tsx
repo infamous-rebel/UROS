@@ -6,9 +6,7 @@
  */
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getToken } from "../api/client";
-
-const API_V1 = "/api/v1";
+import { getToken, API_V1 } from "../api/client";
 
 type BdjobsTab = "scraper" | "csv" | "email" | "webhook";
 
