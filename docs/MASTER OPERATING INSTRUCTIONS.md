@@ -230,6 +230,12 @@ After every Part of a Quest, commit to main with message `Quest NN Part X — <d
 
 This ensures that if a session crashes mid-Quest, all completed Parts are recoverable from git history. Each Part is independently deployable and reversible. Never rewrite history (no `--amend` across Parts, no `rebase -i` to squash Parts together).
 
+### Rule 20 — Push every checkpoint commit
+
+After every commit, immediately run `git push origin main`. Never leave commits unpushed. Verify with `git log origin/main --oneline -3` showing the pushed commit hash. If CI is not triggered within 60 seconds of push, investigate before continuing.
+
+This ensures that remote state matches local state at all times. If a local disk failure occurs, no work is lost. CI feedback is available within minutes, not hours.
+
 
 ---
 
