@@ -86,10 +86,17 @@ export async function getReportRows(
 // format renders the exact same rows returned by getReportRows above.
 // ---------------------------------------------------------------------
 
-/** Deterministic CSV rendering: headers from the first row's keys, RFC4180-style quoting. */
-export function renderCsv(rows: Record<string, unknown>[]): Buffer {
-  if (rows.length === 0) return Buffer.from("");
-  const headers = Object.keys(rows[0]);
+/** Default headers per report type — used when rows are empty so CSV still has a header row. */
+const DEFAULT_HEADERS: Record<ReportType, string[]> = {
+  FUNNEL: ["status", "count"],
+  SHORTLIST_SUMMARY: ["auto_pass", "auto_fail", "needs_review"],
+  VERIFICATION_STATUS: ["status", "count"],
+  AUDIT_LOGS: ["timestamp", "action", "entity_type", "entity_id", "agent_or_user"],
+};
+
+/** Deterministic CSV rendering: headers from the first row's keys (or defaults if empty), RFC4180-style quoting. */
+export function renderCsv(rows: Record<string, unknown>[], type?: ReportType): Buffer {
+  const headers = rows.length > 0 ? Object.keys(rows[0]) : (type ? DEFAULT_HEADERS[type] : ["column"]);
   const escape = (value: unknown) => {
     const s = value === null || value === undefined ? "" : String(value);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -192,7 +199,7 @@ export async function generateReport(
     return { type, format, contentType: "application/json", filename: `${safeName}.json`, data: rows, buffer: null };
   }
   if (format === "csv") {
-    return { type, format, contentType: "text/csv", filename: `${safeName}.csv`, data: null, buffer: renderCsv(rows) };
+    return { type, format, contentType: "text/csv", filename: `${safeName}.csv`, data: null, buffer: renderCsv(rows, type) };
   }
   if (format === "excel") {
     return {

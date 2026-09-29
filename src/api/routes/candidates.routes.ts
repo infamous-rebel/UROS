@@ -6,6 +6,9 @@ import { validate } from "../middleware/validate";
 import { candidateQueryRateLimit } from "../middleware/rate_limit";
 import { db } from "../../database/client";
 import { logAudit } from "../../utils/audit_helper";
+import AdmZip from "adm-zip";
+import fs from "fs";
+import path from "path";
 
 const router = Router();
 
@@ -516,8 +519,29 @@ router.get(
         output_value: { format: "zip", resource: "candidate_documents", filename },
       });
 
-      // Placeholder ZIP (empty ZIP structure)
-      const zipBuffer = Buffer.from("PK\x05\x06" + "\x00".repeat(18));
+      // Query candidate_documents
+      const docs = await db.query(
+        `SELECT doc_id, doc_type, file_location FROM candidate_documents WHERE candidate_id = $1`,
+        [req.params.id]
+      );
+
+      if (docs.rowCount === 0) {
+        res.status(404).json({ error: "No documents to download" });
+        return;
+      }
+
+      // Build real ZIP from actual files
+      const zip = new AdmZip();
+      for (const doc of docs.rows) {
+        const filePath = doc.file_location;
+        if (fs.existsSync(filePath)) {
+          const ext = path.extname(filePath) || ".bin";
+          const fileName = `${doc.doc_type}-${doc.doc_id}${ext}`;
+          zip.addLocalFile(filePath, "", fileName);
+        }
+      }
+
+      const zipBuffer = zip.toBuffer();
       res.setHeader("Content-Type", "application/zip");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
       res.send(zipBuffer);
