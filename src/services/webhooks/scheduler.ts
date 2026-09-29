@@ -3,7 +3,11 @@ import { env } from "../../config/env.schema";
 import { logAudit } from "../../utils/audit_helper";
 import { logger } from "../../utils/logger";
 import { metrics } from "../../utils/metrics";
+import { registerAllProviders } from "../integrations/register_all";
 import { bootstrapAgentRuntime, installProcessSupervisor } from "../agent_runner/supervisor";
+
+// Adapters must be registered before any dispatch in this process.
+registerAllProviders();
 
 /**
  * Fixed exponential-ish backoff schedule, in milliseconds, indexed by

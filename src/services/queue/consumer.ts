@@ -6,12 +6,16 @@ import { logAudit } from "../../utils/audit_helper";
 import { metrics } from "../../utils/metrics";
 import { runEvaluationPipeline } from "../orchestrator/pipeline";
 import { EVALUATION_QUEUE_NAME } from "./producer";
+import { registerAllProviders } from "../../services/integrations/register_all";
 import {
   bootstrapAgentRuntime,
   installProcessSupervisor,
   supervise,
   SupervisedTask,
 } from "../agent_runner/supervisor";
+
+// Adapters must be registered before any dispatch in this process.
+registerAllProviders();
 
 /**
  * Executes the actual evaluation work for a job. Shared by both the

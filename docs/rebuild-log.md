@@ -2,6 +2,47 @@
 
 Chronological record of schema changes, breaking changes, and migration events.
 
+## Quest 04 — Integrations & Transports: Uniform Adapter Registry, Dispatcher, Import Batches
+
+**Date**: 2026-09-29
+**Migrations**: `0032_integrations_quest04.sql`, `0033_import_batches.sql`
+
+### Reason for Change
+
+Before Quest 04, outbound communication flowed through three bespoke legacy connectors (`sms_provider`, `email`, `whatsapp_business`), each with its own transport, error handling, and logging conventions, and inbound integrations (bdjobs, LinkedIn, calendar, Teletalk) were interface declarations with no transport implementations. There was no single dispatch path, no per-org fallback ordering, no rate limiting or circuit breaking, and no way to express "org X prefers provider A, falls back to B." Import batches (bdjobs/Teletalk re-ingest) had no idempotency guard, so the same batch could be applied twice.
+
+Quest 04 introduces a uniform adapter registry — 31 adapters behind one `Integration<TConfig, TInput, TOutput>` contract — a communication dispatcher that is the single transport path for every outbound message (fallback chain → rate limit → circuit breaker → retry → adapter, every outcome logged and audited), and an `import_batches` ledger making re-ingest idempotent.
+
+### Schema Changes (0032)
+
+1. **`api_credentials.connector` CHECK widened**: legacy 11 names + 19 Quest 04 connector names (9 `sms_*`, `voip`, 6 `email_*`, `whatsapp_meta`, 4 `bdjobs_*`, 3 `calendar_*`, `teletalk_sms`, `teletalk_cv_bank`, `free_sms`, 3 `messaging_*`).
+2. **`communication_log` provider tracking**: new columns `provider_message_id TEXT`, `provider_name TEXT`, `error_code TEXT`, `error_message TEXT`; status CHECK adds `QUEUED` (alongside SENT/FAILED/RETRIED/DELIVERED).
+3. **New table `whatsapp_inbound_messages`**: org-scoped inbound WhatsApp messages with provider message-id dedup index and processed flag.
+4. **New table `integration_fallback_configs`**: per-org ordered provider chain per message type (`UNIQUE(org_id, message_type)`, `provider_order JSONB`).
+5. **New table `whatsapp_templates`**: per-org WhatsApp template submissions (PENDING/APPROVED/REJECTED, Meta template id).
+
+### Schema Changes (0033)
+
+6. **New table `import_batches`**: idempotent re-ingest ledger — `batch_id TEXT PK`, org-scoped, `source TEXT` (platform + options JSON), `status TEXT` default ACCEPTED, per-batch accounting (`total_items`, `imported`, `failed` with `failed >= 0` CHECK), `requested_by`, unique `request_id` per org as the re-ingest guard.
+
+### Code Changes
+
+- **New `src/services/integrations/_base/`**: `registry.ts` (adapter registry + `CONNECTOR_TO_ADAPTER` — 30 connector names → 31 adapters), `types.ts` (`Integration` contract, `IntegrationResult` with top-level `provider_id`, `MissingCredentialError`, `ProviderNotImplementedError`), `fallback.ts`, `rate_limit.ts`, `circuit_breaker.ts`, `retry.ts`, `credentials.ts`.
+- **31 adapter modules** under `src/services/integrations/` (sms/, voip/, email/, whatsapp/, bdjobs/, linkedin/, calendar/, teletalk/, free_framework/, messaging/). Interface-only adapters (free_framework, telegram, viber, signal) throw `ProviderNotImplementedError` per the Rule 18 exception, each covered by README + registry entry + asserting test.
+- **New `src/services/integrations/register_all.ts`**: idempotent central registration, called at every boot entrypoint (API server, queue consumer, webhook scheduler, HR-ops scheduler).
+- **New `src/services/communication/dispatcher.ts`**: single transport path — `resolveFallbackChain` (`integration_fallback_configs`, else `CHANNEL_DEFAULT_CHAINS`) → per provider: rate-limit → circuit-breaker → `withRetry` → adapter; registry path writes provider-tracked `communication_log` rows; legacy bridge delegates to `sms_provider`/`email`/`whatsapp_business` (each logging its own row — legacy SMS logging added this quest, fixing a silent-send hole).
+- **New `src/services/communication/template_bodies.ts`**: human-authored en + bn bodies for every `CommunicationTemplateCode`; strict `{{key}}` interpolation; loud throw on unauthored codes (`REDISCOVERY_INVITE` authored this quest).
+- **New `src/api/routes/integrations.routes.ts`**: org-scoped fallback-chain CRUD. `api_credentials` model widened.
+- **`intake_agent.fetchBatch`**: real implementation backed by `import_batches` (was a stub).
+- **Tests**: `tests/mocks/http_provider_mock.ts` (test-only loopback HTTP mock per Rule 18), 8 integration unit suites (113 tests, including a real SMTP loopback handshake), 14-assertion real-DB suite (`tests/integration/real_db/integrations_real.test.ts`) on qoder-test-postgres:5443.
+
+### Breaking Changes
+
+- `communication_log.status` now also accepts `QUEUED` (superset — existing values unchanged).
+- `api_credentials.connector` accepts the new connector names (superset — existing values unchanged).
+- Outbound messages now flow through `dispatchMessage` (dispatcher) rather than calling legacy connectors directly; the legacy connectors remain reachable via the legacy bridge and keep their own `communication_log` writes.
+- `IntegrationResult` gains an optional top-level `provider_id` — adapters SHOULD set it; the dispatcher persists it into `communication_log.provider_message_id` (all 9 SMS adapters were fixed this quest because they only set `data.provider_message_id`).
+
 ## Quest 03 — Pipeline Wiring + Checkpoint Redesign
 
 **Date**: 2026-09-29

@@ -79,6 +79,16 @@ router.post(
         },
       });
 
+      // Durable batch metadata so intake_agent.fetchBatch (and any later
+      // process) can reconstruct what this batch was — replaces the
+      // synthetic marker that previously existed only in the audit trail.
+      await db.query(
+        `INSERT INTO import_batches (batch_id, org_id, circular_id, source, status, total_items, imported, failed, requested_by, request_id)
+         VALUES ($1,$2,$3,$4,'ACCEPTED',$5,$6,$7,$8,$9)
+         ON CONFLICT (batch_id) DO NOTHING`,
+        [batchId, req.user!.org_id, circular_id, source, applications.length, importResult.ok, importResult.failed, req.user!.user_id, req.requestId]
+      );
+
       res.status(202).json({
         batch_id: batchId,
         circular_id,

@@ -2,7 +2,11 @@ import { db } from "../../database/client";
 import { logger } from "../../utils/logger";
 import { AGENT_NAMES, invoke } from "../agent_runner/agents";
 import { runBatchIsolated } from "../agent_runner/batch";
+import { registerAllProviders } from "../integrations/register_all";
 import { bootstrapAgentRuntime, installProcessSupervisor } from "../agent_runner/supervisor";
+
+// Adapters must be registered before any dispatch in this process.
+registerAllProviders();
 
 /**
  * Runs overdue-flagging and due-reminder sweeps across every org.

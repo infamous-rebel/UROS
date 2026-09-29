@@ -10,6 +10,7 @@ import { createRateLimiter } from "./middleware/rate_limit";
 import { buildHealthReport, httpStatusForHealth } from "../utils/health";
 import { renderMetrics } from "../utils/metrics";
 import { registerAllAgents } from "../services/agent_runner/agents";
+import { registerAllProviders } from "../services/integrations/register_all";
 import { bootstrapAgentRuntime, installProcessSupervisor } from "../services/agent_runner/supervisor";
 
 import applicationsRoutes from "./routes/applications.routes";
@@ -36,6 +37,7 @@ import fraudRoutes from "./routes/fraud.routes";
 import i18nRoutes from "./routes/i18n.routes";
 import usersRoutes from "./routes/users.routes";
 import organizationsRoutes from "./routes/organizations.routes";
+import integrationsRoutes from "./routes/integrations.routes";
 import referenceRoutes from "./routes/reference.routes";
 import analyticsRoutes from "./routes/analytics.routes";
 import offboardingRoutes from "./routes/offboarding.routes";
@@ -57,6 +59,7 @@ const globalRateLimit = createRateLimiter("global", 300, 60_000);
 // agents even if none has been invoked yet. Synchronous and side-effect-free
 // beyond populating an in-memory registry.
 registerAllAgents();
+registerAllProviders();
 
 function isMetricsAuthorized(req: express.Request): boolean {
   if (!env.METRICS_TOKEN) return true; // open by default; protect via network/reverse-proxy in production
@@ -154,6 +157,8 @@ export function createApp(): Express {
   v1.use("/i18n", i18nRoutes);
   v1.use("/users", usersRoutes);
   v1.use("/organizations", organizationsRoutes);
+  // Quest 04: provider registry, fallback chains, resilience status, live tests.
+  v1.use("/integrations", integrationsRoutes);
 
   app.use("/api/v1", v1);
 

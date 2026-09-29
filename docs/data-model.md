@@ -14,8 +14,12 @@ UROS uses a multi-tenant PostgreSQL database. Every tenant-scoped table carries 
 | `evaluation_results` | NOT NULL | Migration 0030 | Rule engine outcomes per candidate |
 | `scoring_results` | NOT NULL | Migration 0030 | Dimension scoring totals per candidate |
 | `verification_results` | NOT NULL | Migration 0030 | Source verification outcomes (NID, academic, etc.) |
-| `communication_log` | NOT NULL | Migration 0030 | SMS/Email/WhatsApp delivery records |
+| `communication_log` | NOT NULL | Migration 0030 | SMS/Email/WhatsApp delivery records; Quest 04 adds provider tracking columns (`provider_message_id`, `provider_name`, `error_code`, `error_message`) and `QUEUED` status |
 | `appeals` | NOT NULL | Migration 0030 | Candidate appeal submissions and resolutions |
+| `integration_fallback_configs` | NOT NULL | Migration 0032 | Per-org ordered provider chain per message type (SMS/EMAIL/WHATSAPP); `UNIQUE(org_id, message_type)` |
+| `whatsapp_inbound_messages` | nullable | Migration 0032 | Inbound WhatsApp messages; org nullable until routed to a tenant; provider message-id dedup index |
+| `whatsapp_templates` | NOT NULL | Migration 0032 | Per-org WhatsApp template submissions (PENDING/APPROVED/REJECTED) |
+| `import_batches` | NOT NULL | Migration 0033 | Idempotent re-ingest ledger for bdjobs/Teletalk imports; unique `request_id` per org guards double-apply; per-batch accounting (`total_items`, `imported`, `failed >= 0`) |
 
 ## Key Relationships
 
@@ -99,6 +103,32 @@ Unique index updated: `uq_active_evaluation_job` now includes `COALESCE(gate_id,
 
 Index: `idx_gate_events_org_status_created` on `(org_id, status, created_at DESC)`
 
+## Quest 04 — Integrations & Transports
+
+### New Tables
+
+| Table | Purpose | Key columns / constraints |
+|---|---|---|
+| `integration_fallback_configs` | Per-org ordered provider chain per message type — the dispatcher resolves this before the channel defaults | `config_id` PK, `org_id` FK, `message_type` (SMS/EMAIL/WHATSAPP), `provider_order JSONB` (e.g. `["sms_teletalk","sms_grameenphone"]`), `UNIQUE(org_id, message_type)` |
+| `whatsapp_inbound_messages` | Inbound WhatsApp messages with dedup by provider message id and a processed flag for webhook handlers | `message_id` PK, `org_id` FK (nullable), `from_phone`, `provider_message_id` (indexed), `body`, `media_url`, `received_at`, `processed` |
+| `whatsapp_templates` | Per-org WhatsApp template submissions awaiting Meta approval | `template_id` PK, `org_id` FK, `template_name`, `language`, `body`, `status` CHECK (PENDING/APPROVED/REJECTED), `meta_template_id`, `rejection_reason`, `UNIQUE(org_id, template_name, language)` |
+| `import_batches` | Idempotent re-ingest ledger — one row per requested batch, making bdjobs/Teletalk re-imports safe to retry | `batch_id TEXT` PK, `org_id` FK, `circular_id`, `source TEXT` (platform + options JSON), `status TEXT` default ACCEPTED, `total_items`/`imported`/`failed` (`failed >= 0` CHECK), `requested_by`, `request_id` (unique per org) |
+
+### New Columns on `communication_log`
+
+| Column | Type | Notes |
+|---|---|---|
+| `provider_message_id` | TEXT | Populated by the dispatcher from the adapter's top-level `IntegrationResult.provider_id` |
+| `provider_name` | TEXT | Connector name that produced the row (registry path) |
+| `error_code` | TEXT | Structured error code on FAILED rows |
+| `error_message` | TEXT | Human-readable error on FAILED rows |
+
+`status` CHECK widened to `QUEUED, SENT, FAILED, RETRIED, DELIVERED`.
+
+### Widened Constraint on `api_credentials`
+
+`connector` CHECK now covers 30 connector names: the 11 legacy names plus the Quest 04 registry names (`sms_teletalk` … `messaging_signal`) — see `CONNECTOR_TO_ADAPTER` in `src/services/integrations/_base/registry.ts` for the authoritative list.
+
 ## Migration History
 
 See `src/database/migrations/` for the full sequence. Key milestones:
@@ -108,3 +138,5 @@ See `src/database/migrations/` for the full sequence. Key milestones:
 - 0022: Added org_id to gate_events
 - 0030: Tenant isolation — added org_id to audit_log, evaluation_results, scoring_results, verification_results, communication_log, appeals
 - 0031: Batch checkpoint redesign — per-item progress table, lease/fencing columns, CONTINUE_FROM_GATE stage, resolved_by_name audit trail
+- 0032: Integrations & transports — connector CHECK widened, communication_log provider tracking, whatsapp_inbound_messages, integration_fallback_configs, whatsapp_templates
+- 0033: import_batches — idempotent re-ingest ledger with per-batch accounting

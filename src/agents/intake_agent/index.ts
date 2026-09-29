@@ -1,4 +1,5 @@
 import { logAudit } from "../../utils/audit_helper";
+import { db } from "../../database/client";
 import { RawApplicationDocument } from "../parser_agent";
 import * as teletalk from "../../services/integrations/teletalk";
 
@@ -9,15 +10,36 @@ export interface Batch {
   source: { platform: string; preApprovedAutoIngest: boolean };
 }
 
+/**
+ * Loads batch metadata persisted at import/pull request time
+ * (import_batches, migration 0033). Throws a structured error for an
+ * unknown batch — never a synthetic marker.
+ */
 export async function fetchBatch(batchId: string, orgId: string): Promise<Batch> {
-  // Stub — production: dispatch to connector under services/integrations/*
-  // based on batch metadata persisted at import request time (see
-  // POST /api/v1/applications/import).
+  const res = await db.query<{
+    batch_id: string;
+    org_id: string;
+    circular_id: string;
+    source: string;
+  }>(
+    `SELECT batch_id, org_id, circular_id, source FROM import_batches
+     WHERE batch_id = $1 AND org_id = $2`,
+    [batchId, orgId]
+  );
+  if (res.rowCount === 0) {
+    throw new Error(`Import batch not found: ${batchId} for org ${orgId}`);
+  }
+  const row = res.rows[0];
   return {
-    batch_id: batchId,
-    circular_id: "STUB-CIRCULAR",
-    org_id: orgId,
-    source: { platform: "Teletalk", preApprovedAutoIngest: false },
+    batch_id: row.batch_id,
+    circular_id: row.circular_id,
+    org_id: row.org_id,
+    source: {
+      platform: row.source,
+      // Teletalk applications are pre-approved structured feeds; every
+      // other source requires the normal screening pipeline.
+      preApprovedAutoIngest: row.source === "Teletalk",
+    },
   };
 }
 

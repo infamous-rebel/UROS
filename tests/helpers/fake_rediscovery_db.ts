@@ -2,7 +2,8 @@
  * Minimal stateful in-memory fake for src/database/client.ts, scoped to
  * exactly the queries rediscovery_agent/index.ts, rediscovery.routes.ts,
  * dimension_scoring_agent.assembleCandidateProfile,
- * communication_agent.sendBatch, and utils/audit_helper.ts issue.
+ * communication_agent.sendBatch + the communication dispatcher (fallback
+ * chains, BYOK credential resolution), and utils/audit_helper.ts issue.
  * Dispatches on a normalized prefix of the SQL text rather than parsing
  * SQL — sufficient and honest for a fixed, known query set; not a
  * general-purpose query engine (mirrors fake_fraud_db.ts / fake_offboarding_db.ts).
@@ -22,6 +23,10 @@ export interface FakeRediscoveryDbState {
   rediscovery_outreach: any[];
   communication_log: any[];
   audit_log: any[];
+  /** BYOK credentials (credential_store) — seeded by tests that exercise the dispatcher. */
+  api_credentials: any[];
+  /** Per-org provider fallback chains (fallback.ts). */
+  integration_fallback_configs: any[];
 }
 
 let uuidSeq = 1;
@@ -49,6 +54,8 @@ export function createFakeRediscoveryDb() {
     rediscovery_outreach: [],
     communication_log: [],
     audit_log: [],
+    api_credentials: [],
+    integration_fallback_configs: [],
   };
 
   async function query(text: string, params: any[] = []): Promise<{ rows: any[]; rowCount: number }> {
@@ -285,14 +292,93 @@ export function createFakeRediscoveryDb() {
       return { rows: paged, rowCount: rows.length };
     }
 
-    // --- communication_agent.sendBatch ---
+    // --- communication_agent.sendBatch (organizations lookup, with/without name) ---
+    if (sql.startsWith("SELECT default_language, name FROM organizations WHERE org_id=$1")) {
+      const rows = state.organizations.filter((o) => o.org_id === params[0]);
+      return { rows, rowCount: rows.length };
+    }
     if (sql.startsWith("SELECT default_language FROM organizations WHERE org_id=$1")) {
       const rows = state.organizations.filter((o) => o.org_id === params[0]);
       return { rows, rowCount: rows.length };
     }
+
+    // --- dispatcher → fallback.resolveFallbackChain ---
+    if (sql.startsWith("SELECT provider_order FROM integration_fallback_configs")) {
+      const [orgId, messageType] = params;
+      const rows = state.integration_fallback_configs.filter(
+        (c) => c.org_id === orgId && c.message_type === messageType
+      );
+      return { rows, rowCount: rows.length };
+    }
+
+    // --- credential_store (BYOK lifecycle used by the dispatcher) ---
+    if (sql.startsWith("UPDATE api_credentials SET active=false")) {
+      if (sql.includes("credential_id=$")) {
+        const [credentialId, orgId] = params;
+        for (const row of state.api_credentials) {
+          if (row.credential_id === credentialId && row.org_id === orgId) row.active = false;
+        }
+      } else {
+        const [orgId, connector, label] = params;
+        for (const row of state.api_credentials) {
+          if (row.org_id === orgId && row.connector === connector && row.label === label && row.active === true) {
+            row.active = false;
+          }
+        }
+      }
+      return { rows: [], rowCount: 1 };
+    }
+    if (sql.startsWith("INSERT INTO api_credentials")) {
+      const [org_id, connector, label, encrypted_value, iv, auth_tag, base_url, key_hint, budget_cap, created_by] = params;
+      const row = {
+        credential_id: nextUuid("cred"),
+        org_id,
+        connector,
+        label,
+        encrypted_value,
+        iv,
+        auth_tag,
+        base_url: base_url ?? null,
+        key_hint: key_hint ?? null,
+        budget_cap: budget_cap ?? null,
+        budget_used: 0,
+        created_by: created_by ?? null,
+        active: true,
+        created_at: new Date().toISOString(),
+        rotated_at: null,
+      };
+      state.api_credentials.push(row);
+      return { rows: [{ credential_id: row.credential_id }], rowCount: 1 };
+    }
+    if (sql.startsWith("SELECT * FROM api_credentials WHERE org_id=$1 AND connector=$2 AND label=$3 AND active=true")) {
+      const [orgId, connector, label] = params;
+      const rows = state.api_credentials.filter(
+        (c) => c.org_id === orgId && c.connector === connector && c.label === label && c.active === true
+      );
+      return { rows, rowCount: rows.length };
+    }
+    if (sql.startsWith("SELECT * FROM api_credentials WHERE credential_id=$1 AND org_id=$2")) {
+      const [credentialId, orgId] = params;
+      const rows = state.api_credentials.filter((c) => c.credential_id === credentialId && c.org_id === orgId);
+      return { rows, rowCount: rows.length };
+    }
+
+    // --- communication_log writers (sendBatch, dispatcher legacy/registry,
+    // legacy email/whatsapp): every writer inserts a different column set and
+    // VALUES may mix literals with $n refs — map by expression, not position.
     if (sql.startsWith("INSERT INTO communication_log")) {
-      const [candidate_id, org_id, channel, template_code, language] = params;
-      state.communication_log.push({ candidate_id, org_id, channel, template_code, status: "SENT", language });
+      const insertMatch = sql.match(/INSERT INTO communication_log \(([^)]+)\)\s*VALUES\s*\(([^)]+)\)/i);
+      if (!insertMatch) throw new Error(`fake_rediscovery_db: unparseable communication_log insert: ${sql}`);
+      const cols = insertMatch[1].split(",").map((c) => c.trim());
+      const values = insertMatch[2].split(",").map((v) => v.trim());
+      const row: Record<string, unknown> = {};
+      cols.forEach((col, i) => {
+        const valueExpr = values[i] ?? "NULL";
+        const paramRef = valueExpr.match(/^\$(\d+)$/);
+        row[col] = paramRef ? params[Number(paramRef[1]) - 1] ?? null : valueExpr.replace(/^'/, "").replace(/'$/, "");
+      });
+      if (!row.status) row.status = "SENT";
+      state.communication_log.push(row);
       return { rows: [], rowCount: 1 };
     }
 

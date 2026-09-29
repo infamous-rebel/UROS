@@ -2518,3 +2518,131 @@ _Quest 02 verified by execution: 318 backend tests passing (19 suites, including
 ---
 
 _Quest 03 verified by execution: 336 backend tests passing (20 suites, including 18 real-DB pipeline continuation tests against live Postgres), 46 UI tests passing, typecheck clean. Migration 0031 applied and verified via Checkpoint 1 (psql). Pipeline refactor verified via Checkpoint 2 (grep + tests). Gate lifecycle + rejection semantics verified via Checkpoint 3 (real-DB tests). HIL Gate Inbox UI wired into dashboard as new tab._
+
+---
+
+## Quest 04 — Integrations & Transports: Uniform Adapter Registry, Communication Dispatcher, Import Batches ✅ Complete
+
+**Date**: 2026-09-29
+**Migrations**: `0032_integrations_quest04.sql` (connector CHECK widened to 30 connector names; communication_log provider tracking columns + QUEUED status; whatsapp_inbound_messages; integration_fallback_configs; whatsapp_templates), `0033_import_batches.sql`
+
+### What was built
+
+- **31 uniform adapters** behind the `Integration<TConfig, TInput, TOutput>` contract (`src/services/integrations/`): 9 SMS (teletalk, grameenphone, banglalink, robi, airtel, ssl_wireless, alpha_sms, bulk_sms_bd, generic_http — sharing `sms/shared.ts` HTTP/parse/retry scaffolding), 1 VOIP, 6 email (smtp_outbound with real SMTP handshake, imap_inbound, gmail_api, microsoft_graph, sendgrid, amazon_ses), 1 WhatsApp (meta_cloud_api), 4 bdjobs intake paths (A session scraper, B CSV import, C email intake, D ATS webhook), 1 LinkedIn, 3 calendar (google, microsoft_outlook, ical), 2 Teletalk-category (sms, cv_bank), 1 free_framework, 3 interface-only messaging (telegram, viber, signal).
+- **`_base/` infrastructure**: `registry.ts` + `CONNECTOR_TO_ADAPTER` (30 connector-name mappings — the single source of truth), `fallback.ts` (per-org ordered provider chain), `rate_limit.ts` (per-org token bucket), `circuit_breaker.ts` (per-org breaker), `retry.ts` (exponential backoff), `types.ts` (contract + `MissingCredentialError`/`ProviderNotImplementedError`), `credentials.ts`.
+- **`register_all.ts`** — idempotent central registration of all 31 adapters, called at every boot entrypoint (API server, queue consumer, webhook scheduler, HR-ops scheduler).
+- **`src/services/communication/dispatcher.ts`** — the single transport path for every outbound message: resolve fallback chain (`integration_fallback_configs`, else channel defaults) → per provider: rate-limit check → circuit-breaker check → retry-with-backoff → adapter send → next provider on skipped/definitive, stop on first success. Every outcome lands in `communication_log` (registry path writes provider-tracked rows; legacy bridge delegates to `sms_provider`/`email`/`whatsapp_business` without double-logging) and the audit trail (`MESSAGE_DISPATCHED` / `MESSAGE_DISPATCH_FAILED`).
+- **`src/services/communication/template_bodies.ts`** — human-authored en + bn bodies for every `CommunicationTemplateCode`, strict `{{key}}` interpolation, loud throw on unauthored codes (no silent fallbacks).
+- **`src/api/routes/integrations.routes.ts`** — org-scoped fallback-chain configuration API; `api_credentials` model widened for all Quest 04 connector names.
+- **`intake_agent.fetchBatch`** — real import-batch fetch (previously a stub; now backed by `import_batches`).
+- **Migration 0033** — `import_batches` table: idempotent re-ingest guard (unique request_id per org), per-batch accounting (total/imported/failed), org-scoped.
+- **Test infrastructure** — `tests/mocks/http_provider_mock.ts` (loopback HTTP mock, test-only per Rule 18), 8 integration unit suites (113 tests), a 14-assertion real-DB suite on `qoder-test-postgres:5443`, plus an SMTP loopback server inside the email suite (real smtp-server handshake: AUTH PLAIN → RCPT → DATA, envelope verified).
+
+### Real bugs found and fixed during verification
+
+1. **SMS `provider_message_id` never persisted** (`sms/shared.ts`): `sendOnce`'s success path returned the id only inside `data.provider_message_id`, but the dispatcher persists the top-level `provider_id` into `communication_log.provider_message_id` — all 9 SMS adapters would have logged NULL. Fixed: success result now sets `provider_id: output.provider_message_id`.
+2. **Silent legacy-SMS sends** (`dispatcher.ts`): the legacy `sms_provider` branch delegated to `sendWithRetry` (transport-only, does not log) without writing a `communication_log` row — a parity violation with legacy email/whatsapp (which log their own rows) and a silent-failure hole. Fixed: the branch now writes its own row (status + error message).
+3. **`REDISCOVERY_INVITE` had no authored body**: `renderTemplateBody` throws on unauthored codes, so rediscovery outreach would have crashed once real transport was wired in. Authored en + bn bodies; test added to the expected-codes guard.
+
+### Grep guards (Rule 18) — final grep-before-close-out output
+
+```
+=== Guard 1: no mock imports in dist/ ===                              → 0 matches
+=== Guard 2: no NODE_ENV=test branches in src/services/integrations/ === → 0 matches
+=== Guard 3: no mocks in production compose files ===                   → 0 matches
+=== Guard 4: no mock endpoints in .env.example ===                      → 0 matches
+=== Guard 5: no tests/ imports by src/ source files ===                 → 0 matches (src/ui/node_modules noise excluded)
+=== 'mock' mentions in src source files === 5 files, all policy comments (interface-only doc comments and no-mock-fallback rule text) — no mock usage
+```
+
+### Trust Ledger
+
+Per the close-out contract: two rows per adapter — mock-verified implementation, and live-provider status (honest UNVERIFIED where no live account was exercised). "Live: UNVERIFIED" rows mean exactly that: no claim is made about live-provider behaviour; adapters receive BYOK `baseUrl`/`apiKey` and the wire contract is asserted by the mock-verified row.
+
+| Status | Component | Execution Evidence | Result | Notes |
+|---|---|---|---|---|
+| IMPLEMENTED (mock-verified) | SMS — sms/teletalk.ts | sms_adapters.test.ts (31 tests, 9 adapters, loopback HttpProviderMock): success parse, 4xx → FAILED, 5xx → transient throw, missing credential | verified |
+| LIVE | SMS — teletalk | Not executed against live Teletalk API | UNVERIFIED | Needs real BYOK credentials |
+| IMPLEMENTED (mock-verified) | SMS — sms/grameenphone.ts | sms_adapters.test.ts | verified | Shared shared.ts scaffolding |
+| LIVE | SMS — grameenphone | Not executed against live GP API | UNVERIFIED | Needs real BYOK credentials |
+| IMPLEMENTED (mock-verified) | SMS — sms/banglalink.ts | sms_adapters.test.ts | verified |
+| LIVE | SMS — banglalink | Not executed against live API | UNVERIFIED | Needs real BYOK credentials |
+| IMPLEMENTED (mock-verified) | SMS — sms/robi.ts | sms_adapters.test.ts | verified |
+| LIVE | SMS — robi | Not executed against live API | UNVERIFIED | Needs real BYOK credentials |
+| IMPLEMENTED (mock-verified) | SMS — sms/airtel.ts | sms_adapters.test.ts | verified |
+| LIVE | SMS — airtel | Not executed against live API | UNVERIFIED | Needs real BYOK credentials |
+| IMPLEMENTED (mock-verified) | SMS — sms/ssl_wireless.ts | sms_adapters.test.ts | verified |
+| LIVE | SMS — ssl_wireless | Not executed against live API | UNVERIFIED | Needs real BYOK credentials |
+| IMPLEMENTED (mock-verified) | SMS — sms/alpha_sms.ts | sms_adapters.test.ts | verified |
+| LIVE | SMS — alpha_sms | Not executed against live API | UNVERIFIED | Needs real BYOK credentials |
+| IMPLEMENTED (mock-verified) | SMS — sms/bulk_sms_bd.ts | sms_adapters.test.ts | verified |
+| LIVE | SMS — bulk_sms_bd | Not executed against live API | UNVERIFIED | Needs real BYOK credentials |
+| IMPLEMENTED (mock-verified) | SMS — sms/generic_http.ts | sms_adapters.test.ts | verified | Org-defined endpoint contract |
+| LIVE | SMS — generic_http | Not executed against live endpoint | UNVERIFIED | Needs real BYOK credentials |
+| IMPLEMENTED (mock-verified) | VOIP — voip/voip.ts | whatsapp_voip.test.ts (8 tests, 2 adapters, loopback mock) | verified |
+| LIVE | VOIP | Not executed against live VOIP API | UNVERIFIED | Needs real BYOK credentials |
+| IMPLEMENTED (mock-verified) | Email — smtp_outbound.ts | email_adapters.test.ts (25 tests, 5 outbound adapters) incl. real SMTP loopback server (smtp-server): AUTH PLAIN accepted, RCPT+DATA envelope verified on session.envelope, message body + recipients asserted | verified — real SMTP handshake, no internet |
+| LIVE | Email — smtp | Not executed against a live SMTP relay | UNVERIFIED | Needs real BYOK credentials |
+| IMPLEMENTED (mock-verified) | Email — gmail_api.ts | email_adapters.test.ts | verified |
+| LIVE | Email — gmail_api | Not executed against live Gmail API | UNVERIFIED | Needs OAuth credentials |
+| IMPLEMENTED (mock-verified) | Email — microsoft_graph.ts | email_adapters.test.ts | verified |
+| LIVE | Email — microsoft_graph | Not executed against live Graph API | UNVERIFIED | Needs OAuth credentials |
+| IMPLEMENTED (mock-verified) | Email — sendgrid.ts | email_adapters.test.ts | verified |
+| LIVE | Email — sendgrid | Not executed against live SendGrid API | UNVERIFIED | Needs real BYOK credentials |
+| IMPLEMENTED (mock-verified) | Email — amazon_ses.ts | email_adapters.test.ts | verified |
+| LIVE | Email — amazon_ses | Not executed against live SES API | UNVERIFIED | Needs real BYOK credentials |
+| IMPLEMENTED (mock-verified) | Email — imap_inbound.ts | imap_inbound.test.ts (5 tests, loopback IMAP-style mock) | verified |
+| LIVE | Email — imap_inbound | Not executed against live mailbox | UNVERIFIED | Needs real mailbox |
+| IMPLEMENTED (mock-verified) | WhatsApp — meta_cloud_api.ts | whatsapp_voip.test.ts | verified |
+| LIVE | WhatsApp — meta_cloud_api | Not executed against live Meta Cloud API | UNVERIFIED | Needs real BYOK credentials |
+| IMPLEMENTED (mock-verified) | bdjobs — path_a_session_scraper.ts | bdjobs_teletalk.test.ts (11 tests, 6 adapters, loopback mock) | verified |
+| LIVE | bdjobs — session scraper | Not executed against live bdjobs.com | UNVERIFIED | Needs real account; scraping may need re-validation |
+| IMPLEMENTED (mock-verified) | bdjobs — path_b_csv_import.ts | bdjobs_teletalk.test.ts | verified |
+| LIVE | bdjobs — CSV import | Not executed against live export flow | UNVERIFIED | Needs real account |
+| IMPLEMENTED (mock-verified) | bdjobs — path_c_email_intake.ts | bdjobs_teletalk.test.ts | verified |
+| LIVE | bdjobs — email intake | Not executed against live mailbox | UNVERIFIED | Needs real mailbox |
+| IMPLEMENTED (mock-verified) | bdjobs — path_d_ats_webhook.ts | bdjobs_teletalk.test.ts | verified |
+| LIVE | bdjobs — ATS webhook | Not executed against live ATS | UNVERIFIED | Needs real webhook source |
+| IMPLEMENTED (mock-verified) | LinkedIn — linkedin/linkedin.ts | calendar_linkedin_messaging.test.ts (17 tests, 8 adapters, loopback mock) | verified |
+| LIVE | LinkedIn | Not executed against live LinkedIn API | UNVERIFIED | Needs partner credentials |
+| IMPLEMENTED (mock-verified) | Calendar — calendar/google.ts | calendar_linkedin_messaging.test.ts | verified |
+| LIVE | Calendar — google | Not executed against live Google Calendar API | UNVERIFIED | Needs OAuth credentials |
+| IMPLEMENTED (mock-verified) | Calendar — calendar/microsoft_outlook.ts | calendar_linkedin_messaging.test.ts | verified |
+| LIVE | Calendar — microsoft_outlook | Not executed against live Outlook API | UNVERIFIED | Needs OAuth credentials |
+| IMPLEMENTED (mock-verified) | Calendar — calendar/ical.ts | calendar_linkedin_messaging.test.ts | verified | Standard iCalendar feed |
+| LIVE | Calendar — ical | Not executed against live feed | UNVERIFIED | Needs real feed URL |
+| IMPLEMENTED (mock-verified) | Teletalk category — teletalk/sms.ts | bdjobs_teletalk.test.ts | verified | Government-tenant semantics |
+| LIVE | Teletalk — sms | Not executed against live API | UNVERIFIED | Needs government tenant credentials |
+| IMPLEMENTED (mock-verified) | Teletalk category — teletalk/cv_bank.ts | bdjobs_teletalk.test.ts | verified |
+| LIVE | Teletalk — cv_bank | Not executed against live API | UNVERIFIED | Needs government tenant credentials |
+| IMPLEMENTED (interface-only) | free_framework/free_framework.ts | calendar_linkedin_messaging.test.ts asserts ProviderNotImplementedError on send(); README documents the contract; registered in CONNECTOR_TO_ADAPTER | verified | Rule 18 exception — awaits live provider contribution |
+| LIVE | free_framework | N/A by design | UNVERIFIED | Interface-only |
+| IMPLEMENTED (interface-only) | messaging/telegram.ts | calendar_linkedin_messaging.test.ts asserts the throw; README + registry entry present | verified | Rule 18 exception |
+| LIVE | messaging — telegram | N/A by design | UNVERIFIED | Interface-only |
+| IMPLEMENTED (interface-only) | messaging/viber.ts | calendar_linkedin_messaging.test.ts asserts the throw; README + registry entry present | verified | Rule 18 exception |
+| LIVE | messaging — viber | N/A by design | UNVERIFIED | Interface-only |
+| IMPLEMENTED (interface-only) | messaging/signal.ts | calendar_linkedin_messaging.test.ts asserts the throw; README + registry entry present | verified | Rule 18 exception |
+| LIVE | messaging — signal | N/A by design | UNVERIFIED | Interface-only |
+| IMPLEMENTED | _base/registry.ts + register_all.ts | registry.test.ts (9 tests): every CONNECTOR_TO_ADAPTER name resolves to a registered adapter; registerAllProviders idempotent (double registration converges) | verified | 30 connector names → 31 adapters |
+| IMPLEMENTED | _base/{fallback,rate_limit,circuit_breaker,retry,types}.ts | Exercised through dispatcher tests (batch_isolation, rediscovery.routes, real-DB suite): chain resolution, MISSING_CREDENTIAL skip, RATE_LIMITED, CIRCUIT_OPEN, transient retry | verified |
+| IMPLEMENTED | communication/dispatcher.ts | batch_isolation.test.ts + rediscovery.routes.test.ts (outreach sends through the full chain against loopback credentials) + real-DB suite (communication_log provider tracking rows asserted on real Postgres) | verified | Fallback chain, legacy bridge, audits |
+| IMPLEMENTED | communication/template_bodies.ts | template_bodies.test.ts (7 tests): every CommunicationTemplateCode authored in en+bn, strict interpolation, loud throw on unauthored code; REDISCOVERY_INVITE added | verified |
+| IMPLEMENTED (bug fix) | sms/shared.ts provider_id | Real-DB suite: communication_log.provider_message_id now populated for SMS sends (was NULL for all 9 SMS adapters) | verified |
+| IMPLEMENTED (bug fix) | dispatcher legacy-SMS logging | batch_isolation.test.ts: legacy SMS sends now write their own communication_log row (parity with legacy email/whatsapp) | verified |
+| IMPLEMENTED (audit) | Migration 0032_integrations_quest04.sql | Applied to qoder-test-postgres:5443 via npm run migrate; re-run idempotent | verified | Connector CHECK (30 names), communication_log provider columns + QUEUED, whatsapp_inbound_messages, integration_fallback_configs, whatsapp_templates |
+| IMPLEMENTED (audit) | Migration 0033_import_batches.sql | Applied to qoder-test-postgres:5443; table + unique guard + CHECK verified via psql; re-run idempotent (2nd run: 32 skipped, 0 applied; schema_migrations = 32) | verified | Idempotent re-ingest guard, per-batch accounting |
+| IMPLEMENTED (audit) | intake_agent.fetchBatch | Real implementation backed by import_batches (was a stub); covered by real-DB suite import flow | verified |
+| IMPLEMENTED (audit) | integrations.routes.ts + credentials model | Real-DB suite: fallback config CRUD + credential rotation via real Express + real Postgres | verified |
+| IMPLEMENTED (audit) | Boot wiring (server, queue consumer, schedulers) | registerAllProviders() called at every entrypoint; grep verification | verified |
+| IMPLEMENTED (audit) | tests/mocks/http_provider_mock.ts | Test-only loopback HTTP mock (recorded requests, route table); imported ONLY from tests/ (Guard 5) | verified | Rule 18 compliant |
+| IMPLEMENTED (audit) | Unit test suite | npm test — 463 passing / 0 failing across 29 suites (incl. 8 integration suites, 113 tests) | verified — executed 2026-09-29 |
+| IMPLEMENTED (audit) | Real-DB suite | tests/integration/real_db/integrations_real.test.ts — 14/14 against live qoder-test-postgres:5443 (credentials API, sendBatch + dispatcher, import_batches, migrations ledger) | verified |
+| IMPLEMENTED (audit) | Typecheck (backend) | npx tsc --noEmit — 0 errors | verified |
+| IMPLEMENTED (audit) | Lint | npx eslint src tests scripts — 0 errors (16 pre-existing warnings in scripts/) | verified |
+| IMPLEMENTED (audit) | docs/data-model.md | Updated: integration_fallback_configs, whatsapp_inbound_messages, whatsapp_templates, import_batches, communication_log provider columns | verified |
+| IMPLEMENTED (audit) | docs/architecture.md | Added integration registry + dispatcher flow section | verified |
+| IMPLEMENTED (audit) | docs/rebuild-log.md | Added Quest 04 entry: reason, schema changes, code changes, breaking changes | verified |
+
+---
+
+_Quest 04 verified by execution: 463 backend tests passing (29 suites, including 113 integration-adapter tests against loopback mocks and 14 real-DB assertions against live Postgres), 46 UI tests passing, typecheck clean, lint clean. Migrations 0032–0033 applied and idempotency-proven on qoder-test-postgres:5443 (2nd run: 32 skipped, 0 applied). Three real bugs found and fixed during verification (SMS provider_message_id, silent legacy-SMS sends, unauthored REDISCOVERY_INVITE). Rule 18 grep guards all clean. No adapter was claimed live-verified: every adapter row carries an honest LIVE status._

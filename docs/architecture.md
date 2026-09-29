@@ -1,5 +1,51 @@
 # Architecture
 
+## Integration Registry & Communication Dispatcher (Quest 04)
+
+Every outbound message and connector invocation flows through one path: the communication dispatcher (`src/services/communication/dispatcher.ts`). Every provider integration lives behind a uniform adapter contract (`Integration<TConfig, TInput, TOutput>`) in `src/services/integrations/` — 31 adapters across SMS, VOIP, email, WhatsApp, bdjobs, LinkedIn, calendar, Teletalk, and interface-only messaging, registered centrally and idempotently by `register_all.ts` at every boot entrypoint.
+
+```mermaid
+flowchart TD
+    CALLER["sendBatch / routes / agents"] --> DP["dispatchMessage(org, type, msg, meta)"]
+    DP --> CH{"integration_fallback_configs<br/>for org + type?"}
+    CH -- "configured" --> ORDERED["org's provider_order"]
+    CH -- "not configured" --> DEF["CHANNEL_DEFAULT_CHAINS<br/>SMS→sms_provider, EMAIL→email,<br/>WHATSAPP→whatsapp_business"]
+    ORDERED --> LOOP{"next provider<br/>in chain"}
+    DEF --> LOOP
+    LOOP --> LEG{"legacy connector?"}
+    LEG -- "yes" --> OLD["sendViaLegacy<br/>(sms_provider / email / whatsapp_business —<br/>own communication_log writes)"]
+    LEG -- "no" --> REG["sendViaRegistry"]
+    REG --> CRED{"BYOK credential?"}
+    CRED -- "missing" --> SKIP["skipped: MISSING_CREDENTIAL<br/>→ next provider"]
+    CRED -- "yes" --> RL{"rate limit<br/>token bucket"}
+    RL -- "empty" --> SKIP2["skipped: RATE_LIMITED"]
+    RL -- "ok" --> CB{"circuit<br/>breaker"}
+    CB -- "open" --> SKIP3["skipped: CIRCUIT_OPEN"]
+    CB -- "closed" --> RETRY["withRetry<br/>(4xx/malformed = definitive FAILED;<br/>5xx/network = transient, retried)"]
+    RETRY --> OK{"result?"}
+    OK -- "SENT" --> LOG["communication_log row<br/>(provider_message_id, provider_name)<br/>+ MESSAGE_DISPATCHED audit"]
+    OK -- "FAILED" --> NEXTP["next provider in chain"]
+    SKIP --> NEXTP
+    SKIP2 --> NEXTP
+    SKIP3 --> NEXTP
+    NEXTP --> LOOP
+    LOG --> DONE["return DispatchOutcome"]
+
+    style LOG fill:#0F766E,color:#fff
+    style SKIP fill:#E2725B,color:#fff
+    style SKIP2 fill:#E2725B,color:#fff
+    style SKIP3 fill:#E2725B,color:#fff
+```
+
+Key invariants:
+
+- **Single source of truth**: `CONNECTOR_TO_ADAPTER` in `src/services/integrations/_base/registry.ts` maps every DB connector name to its adapter (30 names → 31 adapters).
+- **No silent failures**: every attempt outcome lands in `communication_log` (registry path writes provider-tracked rows; the legacy bridge delegates to connectors that log their own rows) and the audit trail (`MESSAGE_DISPATCHED` / `MESSAGE_DISPATCH_FAILED`).
+- **BYOK only**: adapters receive `baseUrl`/`apiKey` from the org's `api_credentials` row and never branch on `NODE_ENV` or fall back to defaults; missing credentials throw `MissingCredentialError` (the dispatcher treats it as a skipped provider, not a crash).
+- **Definitive vs transient**: adapter-level 4xx/malformed responses return `FAILED` (move to next provider); 5xx/network errors throw (retried with backoff first).
+- **Templates are authored, not improvised**: `template_bodies.ts` holds human-authored en/bn bodies per `CommunicationTemplateCode`; strict `{{key}}` interpolation; an unauthored code throws loudly.
+- **Interface-only adapters** (`free_framework`, `telegram`, `viber`, `signal`) throw `ProviderNotImplementedError` on send per the Rule 18 exception — documented contract, registry entry, asserting test.
+
 ## Gate-Driven Pipeline Lifecycle
 
 The UROS evaluation pipeline is a chain of asynchronous queue jobs connected by human-in-the-loop gates. No stage blocks a worker — each gate creates a durable `PENDING` row and returns; resolution enqueues a `CONTINUE_FROM_GATE` job that resumes the pipeline.

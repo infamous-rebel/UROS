@@ -1,0 +1,8 @@
+/**
+ * Viber messaging adapter (messaging:viber) — INTERFACE-ONLY.
+ * Per MASTER Rule 18 exception: awaiting a live provider contribution.
+ * send() throws ProviderNotImplementedError (see interface_only.ts).
+ */
+import { makeInterfaceOnlyMessagingAdapter } from "./interface_only";
+
+export const viberAdapter = makeInterfaceOnlyMessagingAdapter("viber");

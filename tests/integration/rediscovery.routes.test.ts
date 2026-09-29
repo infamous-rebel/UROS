@@ -13,6 +13,8 @@ jest.mock("../../src/database/client", () => ({ db: fake.db }));
 import rediscoveryRoutes from "../../src/api/routes/rediscovery.routes";
 import { errorHandler } from "../../src/api/middleware/error_handler";
 import { generateConsentToken } from "../../src/agents/rediscovery_agent";
+import { storeCredential } from "../../src/services/integrations/credential_store";
+import { HttpProviderMock } from "../mocks/http_provider_mock";
 
 function buildApp() {
   const app = express();
@@ -34,6 +36,20 @@ const AUDITOR_TOKEN = tokenFor("AUDITOR");
 const ORG_ID = "org-1";
 const PERSONA_ID = "11111111-1111-1111-1111-111111111111";
 
+// The dispatcher transports for real: outreach POSTs to the org's BYOK
+// base_url, so the credentials seeded below point at a loopback mock —
+// never the internet.
+const providerMock = new HttpProviderMock();
+
+beforeAll(async () => {
+  await providerMock.start();
+  providerMock.setRoutes([
+    { path: "/v1/send", status: 200, body: JSON.stringify({ message_id: "routes-sms-ok" }) },
+    { path: "/send", status: 200, body: JSON.stringify({ id: "routes-email-ok" }) },
+  ]);
+});
+afterAll(async () => providerMock.stop());
+
 function resetState() {
   fake.state.organizations.length = 0;
   fake.state.candidates.length = 0;
@@ -49,8 +65,10 @@ function resetState() {
   fake.state.rediscovery_outreach.length = 0;
   fake.state.communication_log.length = 0;
   fake.state.audit_log.length = 0;
+  fake.state.api_credentials.length = 0;
+  fake.state.integration_fallback_configs.length = 0;
 
-  fake.state.organizations.push({ org_id: ORG_ID, default_language: "en" });
+  fake.state.organizations.push({ org_id: ORG_ID, default_language: "en", name: "Rediscovery Org" });
 
   fake.state.personas.push({ persona_id: PERSONA_ID, org_id: ORG_ID, name: "Relationship Manager", active: true });
   fake.state.persona_requirements.push(
@@ -70,6 +88,8 @@ function addCandidate(id: string, overrides: Record<string, any> = {}) {
     job_circular_id: "CIRC-OLD",
     position_applied: "Officer",
     preferred_language: null,
+    phone_primary: "+8801700000001",
+    email: `${id}@example.test`,
     ...overrides,
   });
   fake.state.candidate_academic_records.push({
@@ -90,8 +110,12 @@ function addCandidate(id: string, overrides: Record<string, any> = {}) {
   });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   resetState();
+  // Outreach sends go through the dispatcher, which requires ACTIVE BYOK
+  // credentials for the legacy connectors on the default chains.
+  await storeCredential(ORG_ID, "sms_provider", "test-key", "user-1", { baseUrl: providerMock.baseUrl() });
+  await storeCredential(ORG_ID, "email", "test-key", "user-1", { baseUrl: providerMock.baseUrl() });
 });
 
 describe("POST /api/v1/rediscovery/consent", () => {

@@ -23,6 +23,8 @@ import { runAgent } from "../../../src/services/agent_runner/runner";
 import { resetAgentStates, getAgentState } from "../../../src/services/agent_runner/agent_state";
 import { getPoolForClass } from "../../../src/services/agent_runner/pools";
 import { metricValue } from "../../helpers/metrics_probe";
+import { HttpProviderMock } from "../../mocks/http_provider_mock";
+import { storeCredential } from "../../../src/services/integrations/credential_store";
 
 interface FakeHolder {
   current: { query: (text: string, params?: any[]) => Promise<{ rows: any[]; rowCount: number }> };
@@ -358,14 +360,31 @@ describe("fraud detection: per-candidate isolation", () => {
 });
 
 describe("rediscovery outreach: per-item isolation", () => {
+  // The dispatcher transports for real: the legacy SMS connector POSTs to
+  // the org's BYOK base_url, so the fake credential points at a loopback
+  // mock — never the internet.
+  let mock: HttpProviderMock;
+
+  beforeAll(async () => {
+    mock = new HttpProviderMock();
+    await mock.start();
+    mock.setRoutes([{ path: "/v1/send", status: 200, body: JSON.stringify({ message_id: "iso-ok" }) }]);
+  });
+  afterAll(async () => mock.stop());
+
+  async function seedSmsCredential(): Promise<void> {
+    await storeCredential(ORG, "sms_provider", "rediscovery-test-key", "user-1", { baseUrl: mock.baseUrl() });
+  }
+
   function seedSuggestion(state: any, suggestionId: string, candidateId: string, status = "APPROVED") {
     state.candidates.push({
       candidate_id: candidateId,
       org_id: ORG,
       full_name: `Candidate ${candidateId}`,
+      phone_primary: "+8801700000001",
       preferred_language: null,
     });
-    if (state.organizations.length === 0) state.organizations.push({ org_id: ORG, default_language: "en" });
+    if (state.organizations.length === 0) state.organizations.push({ org_id: ORG, default_language: "en", name: "Isolation Org" });
     state.rediscovery_consents.push({
       consent_id: `consent-${candidateId}`,
       candidate_id: candidateId,
@@ -391,6 +410,7 @@ describe("rediscovery outreach: per-item isolation", () => {
 
   it("sends the rest of the batch and reports the failed suggestion in `skipped`", async () => {
     const state = useRediscoveryDb();
+    await seedSmsCredential();
     seedSuggestion(state, "sug-1", "C1");
     seedSuggestion(state, "sug-2", "C2");
     seedSuggestion(state, "sug-3", "C3");
@@ -429,6 +449,7 @@ describe("rediscovery outreach: per-item isolation", () => {
 
   it("keeps the pre-existing business skips distinct from infrastructure failures", async () => {
     const state = useRediscoveryDb();
+    await seedSmsCredential();
     seedSuggestion(state, "sug-ok", "C-OK");
     seedSuggestion(state, "sug-pending", "C-PENDING", "PENDING_REVIEW");
 
