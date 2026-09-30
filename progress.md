@@ -2646,3 +2646,69 @@ Per the close-out contract: two rows per adapter — mock-verified implementatio
 ---
 
 _Quest 04 verified by execution: 463 backend tests passing (29 suites, including 113 integration-adapter tests against loopback mocks and 14 real-DB assertions against live Postgres), 46 UI tests passing, typecheck clean, lint clean. Migrations 0032–0033 applied and idempotency-proven on qoder-test-postgres:5443 (2nd run: 32 skipped, 0 applied). Three real bugs found and fixed during verification (SMS provider_message_id, silent legacy-SMS sends, unauthored REDISCOVERY_INVITE). Rule 18 grep guards all clean. No adapter was claimed live-verified: every adapter row carries an honest LIVE status._
+
+---
+
+## Quest 05 — Operator UI, Full Auth, i18n, E2E
+
+### Parts Completed
+
+| Part | Description | Status | Commit |
+|------|-------------|--------|--------|
+| 1–5 | Foundation: Auth, UI panels, i18n keys | ✅ Complete | Various |
+| 6 | Brain Studio, Settings, Reports panels | ✅ Complete | Various |
+| 7 | HIL Gate Inbox polish | ✅ Complete | 83f468f |
+| 8 | Navigation: sidebar, breadcrumbs, command palette | ✅ Complete | Various |
+| 9 | i18n coverage: 890+ keys, en↔bn parity | ✅ Complete | fb190e3 |
+| 10 | i18n: remaining 10 panels fully translated | ✅ Complete | fb190e3 |
+| 11 | HIL Gates: batch ops, keyboard nav, audit trail | ✅ Complete | 83f468f |
+| 12 | Playwright E2E: 10 suites, 36 tests, 30 screenshots | ✅ Complete | f29eabe |
+| 13 | Documentation: all required docs created | ✅ Complete | This commit |
+
+### Trust Ledger — Quest 05
+
+| Item | Status | Evidence |
+|------|--------|----------|
+| Backend tests | ✅ 463 passing | `npm test` — 29 suites |
+| UI tests | ✅ 46 passing | Vite build clean |
+| Playwright E2E | ✅ 36 passing | 10 suites, 3.8m runtime |
+| Typecheck | ✅ 0 errors | `npm run typecheck` |
+| i18n key parity | ✅ 890+ keys | en.json ↔ bn.json verified |
+| Screenshots | ✅ 30 distinct | `cmp` verified all pairs |
+| CI split | ✅ 2 jobs | e2e-fast + e2e-evidence |
+| Documentation | ✅ Complete | 13 new files created |
+
+### Documentation Created
+
+- `CONTRIBUTING.md` — development setup, code standards, PR process
+- `CHANGELOG.md` — version history from Quest 01 through 05
+- `LICENSE` — MIT License
+- `SECURITY.md` — security policy, architecture, vulnerability reporting
+- `docs/features.md` — full feature inventory across all panels
+- `docs/agents.md` — 25 agents with contracts and runner docs
+- `docs/workers.md` — queue consumer, scheduler, integration poller
+- `docs/api.md` — API reference with all endpoints
+- `docs/ocr-architecture.md` — 7-layer OCR pipeline
+- `docs/byok.md` — Bring Your Own Key configuration
+- `docs/compliance.md` — regulatory compliance and certification roadmap
+- `docs/runbooks/disaster_recovery.md` — DR procedures with RPO/RTO
+- `docs/runbooks/supervisor.md` — HIL gate management runbook
+
+### E2E Test Suites
+
+| Suite | Tests | Description |
+|-------|-------|-------------|
+| auth.spec.ts | 3 | Login, wrong password, logout |
+| critical-path.spec.ts | 1 | Full recruitment flow (10 steps) |
+| pipeline.spec.ts | 4 | Dashboard, intake, HIL gates, navigation |
+| brain-studio.spec.ts | 3 | Rule pack editor, sector selector, rule types |
+| hil-gates.spec.ts | 3 | Empty/pending state, audit trail, helpful message |
+| settings.spec.ts | 5 | Tabs, Credentials, Backup, Audit, Data Export |
+| downloads.spec.ts | 4 | Download buttons, selector, empty prompt, 401 |
+| i18n.spec.ts | 4 | Switcher, Bangla, English, settings |
+| navigation.spec.ts | 5 | Nav groups, click-through, breadcrumb, collapse, Cmd+K |
+| console-clean.spec.ts | 4 | No console.error, no uncaught rejections |
+
+---
+
+_Quest 05 verified by execution: 36 Playwright E2E tests passing (10 suites, 3.8m), 463 backend tests passing, 46 UI tests passing, typecheck clean, i18n parity verified (890+ keys en↔bn), 30 curated screenshots all distinct (cmp-verified), CI split into e2e-fast (headless, every PR) + e2e-evidence (headed, main+nightly). 13 documentation files created covering all required areas from MASTER OPERATING INSTRUCTIONS §12._
