@@ -21,9 +21,9 @@ const bcrypt = require('bcryptjs');
     // Create admin user with password
     const hash = await bcrypt.hash('Admin@1234', 12);
     await c.query(`
-      INSERT INTO users (email, password_hash, role, org_id, active, password_reset_required)
-      VALUES ('admin@uros.gov.bd', $1, 'ADMIN', '00000000-0000-0000-0000-000000000001', true, false)
-      ON CONFLICT (email) DO NOTHING
+      INSERT INTO users (user_id, org_id, full_name, email, phone, role, active, password_reset_required, password_hash)
+      VALUES ('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 'CI Admin', 'admin@uros.gov.bd', '+8801700000001', 'ADMIN', true, false, $1)
+      ON CONFLICT (user_id) DO NOTHING
     `, [hash]);
     console.log('✓ Admin user created');
     
