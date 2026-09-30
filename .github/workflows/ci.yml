@@ -2,6 +2,11 @@
 #
 # Runs on every push/PR to main. Fails on any lint, typecheck, test, or
 # build failure. Postgres and Redis are real service containers (not mocks).
+#
+# Quest 05 Part 12: Split into 3 jobs:
+#   ci          — lint, typecheck, unit/integration tests, build, guards
+#   e2e-fast    — headless Playwright on every PR (< 5 min)
+#   e2e-evidence — headed Playwright with screenshots on main merge + nightly
 name: CI
 
 on:
@@ -9,6 +14,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: "0 2 * * *"  # nightly at 02:00 UTC
 
 env:
   NODE_VERSION: "20"
@@ -166,3 +173,184 @@ jobs:
             fi
           done
           echo "PASS: all major dashboard components use i18n"
+
+  # ─── E2E Fast: headless, every PR ──────────────────────────────────────────
+  e2e-fast:
+    name: E2E (headless, fast)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    needs: ci
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: uros_test
+          POSTGRES_PASSWORD: uros_test
+          POSTGRES_DB: uros_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U uros_test -d uros_test"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: [6379:6379]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://uros_test:uros_test@localhost:5432/uros_test
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-test-secret-must-be-at-least-32-characters-long
+      ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run migrate
+
+      - name: Seed test user
+        run: |
+          node -e "
+            const { Client } = require('pg');
+            const bcrypt = require('bcryptjs');
+            (async () => {
+              const c = new Client(process.env.DATABASE_URL);
+              await c.connect();
+              const hash = await bcrypt.hash('Admin@1234', 12);
+              await c.query(\`
+                INSERT INTO users (email, password_hash, role, org_id, active, password_reset_required)
+                VALUES ('admin@uros.gov.bd', \$1, 'ADMIN', '00000000-0000-0000-0000-000000000001', true, false)
+                ON CONFLICT (email) DO NOTHING
+              \`, [hash]);
+              await c.end();
+            })();
+          "
+
+      - name: Start API server
+        run: npm run dev &
+      - run: npx wait-on http://localhost:3000/health --timeout 60000
+
+      - name: Start UI server
+        working-directory: src/ui
+        run: npx vite --port 5173 &
+      - run: npx wait-on http://localhost:5173 --timeout 60000
+
+      - name: Run Playwright (headless, no screenshots)
+        run: npx playwright test --reporter=list
+        env:
+          CI: "true"
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces-fast
+          path: |
+            test-results/**/trace.zip
+            test-results/**/*.png
+          retention-days: 7
+
+  # ─── E2E Evidence: headed, screenshots + video, main + nightly ─────────────
+  e2e-evidence:
+    name: E2E (headed, screenshots)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'schedule'
+    needs: ci
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: uros_test
+          POSTGRES_PASSWORD: uros_test
+          POSTGRES_DB: uros_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U uros_test -d uros_test"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: [6379:6379]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://uros_test:uros_test@localhost:5432/uros_test
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-test-secret-must-be-at-least-32-characters-long
+      ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run migrate
+
+      - name: Seed test user
+        run: |
+          node -e "
+            const { Client } = require('pg');
+            const bcrypt = require('bcryptjs');
+            (async () => {
+              const c = new Client(process.env.DATABASE_URL);
+              await c.connect();
+              const hash = await bcrypt.hash('Admin@1234', 12);
+              await c.query(\`
+                INSERT INTO users (email, password_hash, role, org_id, active, password_reset_required)
+                VALUES ('admin@uros.gov.bd', \$1, 'ADMIN', '00000000-0000-0000-0000-000000000001', true, false)
+                ON CONFLICT (email) DO NOTHING
+              \`, [hash]);
+              await c.end();
+            })();
+          "
+
+      - name: Start API server
+        run: npm run dev &
+      - run: npx wait-on http://localhost:3000/health --timeout 60000
+
+      - name: Start UI server
+        working-directory: src/ui
+        run: npx vite --port 5173 &
+      - run: npx wait-on http://localhost:5173 --timeout 60000
+
+      - name: Run Playwright (headed via xvfb, screenshots + video)
+        run: xvfb-run --auto-servernum npx playwright test --reporter=list
+        env:
+          CI: "true"
+
+      - name: Run screenshot curator
+        run: xvfb-run --auto-servernum npx playwright test screenshot-curator --reporter=list
+        env:
+          CI: "true"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-evidence-screenshots
+          path: docs/e2e-evidence/quest-05/e2e/*.png
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces-evidence
+          path: |
+            test-results/**/trace.zip
+            test-results/**/*.webm
+            test-results/**/*.png
+          retention-days: 14
