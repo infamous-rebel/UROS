@@ -23,13 +23,13 @@ export default defineConfig({
     {
       command: "npm run dev",
       port: 3000,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: true,
       timeout: 120_000,
     },
     {
       command: "cd src/ui && npx vite --port 5173",
       port: 5173,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: true,
       timeout: 120_000,
     },
   ],
