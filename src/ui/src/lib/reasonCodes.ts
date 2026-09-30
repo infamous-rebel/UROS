@@ -383,6 +383,84 @@ export const REASON_CODES: Record<string, ReasonCodeEntry> = {
     tone: "fail",
   },
 
+  // ── Auth / audit events ────────────────────────────────────────────
+  LOGIN: { code: "LOGIN", short_label: "Signed in", full_sentence: "A user signed in to the system.", why: "Authentication succeeded with valid credentials.", tone: "pass" },
+  LOGOUT: { code: "LOGOUT", short_label: "Signed out", full_sentence: "A user signed out of the system.", why: "The session was terminated by the user.", tone: "pass" },
+  LOGOUT_ALL: { code: "LOGOUT_ALL", short_label: "All sessions ended", full_sentence: "All active sessions for this user have been terminated.", why: "A global logout was triggered, invalidating all session tokens.", tone: "pass" },
+  ORG_SWITCH: { code: "ORG_SWITCH", short_label: "Org switched", full_sentence: "The user switched to a different organization.", why: "The active organization context was changed.", tone: "pass" },
+  INVITE: { code: "INVITE", short_label: "Invited", full_sentence: "An invitation was sent to a new user.", why: "A user account was created and an invite email dispatched.", tone: "pass" },
+  ADMIN_REVOKED: { code: "ADMIN_REVOKED", short_label: "Admin revoked", full_sentence: "An administrator revoked this user's access.", why: "An admin manually disabled the user account.", tone: "fail" },
+  SESSION_LIMIT: { code: "SESSION_LIMIT", short_label: "Session limit", full_sentence: "The maximum number of concurrent sessions was reached.", why: "The user already has the maximum allowed active sessions.", tone: "review" },
+  TOKEN_REUSED: { code: "TOKEN_REUSED", short_label: "Token reused", full_sentence: "A previously used authentication token was presented again.", why: "Token reuse may indicate theft or a replay attack.", tone: "fail" },
+  BAD_CREDENTIALS: { code: "BAD_CREDENTIALS", short_label: "Bad credentials", full_sentence: "The provided credentials are incorrect.", why: "Email or password did not match any account.", tone: "fail" },
+  BAD_CURRENT_PASSWORD: { code: "BAD_CURRENT_PASSWORD", short_label: "Wrong password", full_sentence: "The current password entered is incorrect.", why: "The user provided the wrong current password during a password change.", tone: "fail" },
+  PASSWORD_CHANGE: { code: "PASSWORD_CHANGE", short_label: "Password changed", full_sentence: "The user changed their password.", why: "A password update was successfully applied.", tone: "pass" },
+  PASSWORD_RESET_REQUIRED: { code: "PASSWORD_RESET_REQUIRED", short_label: "Reset required", full_sentence: "A password reset is required before continuing.", why: "The account policy requires the user to set a new password.", tone: "review" },
+  RESET_REQUESTED: { code: "RESET_REQUESTED", short_label: "Reset requested", full_sentence: "A password reset was requested.", why: "The user initiated the password recovery flow.", tone: "pass" },
+  RESET_LINK_ISSUED: { code: "RESET_LINK_ISSUED", short_label: "Reset link sent", full_sentence: "A password reset link has been sent.", why: "A one-time reset link was dispatched to the user's email.", tone: "pass" },
+  RESET_COMPLETED: { code: "RESET_COMPLETED", short_label: "Reset done", full_sentence: "The password has been successfully reset.", why: "The user completed the password reset flow.", tone: "pass" },
+  UNKNOWN_EMAIL: { code: "UNKNOWN_EMAIL", short_label: "Unknown email", full_sentence: "No account was found with this email address.", why: "The email address does not match any registered user.", tone: "review" },
+  UNKNOWN_OR_INACTIVE_ACCOUNT: { code: "UNKNOWN_OR_INACTIVE_ACCOUNT", short_label: "Unknown account", full_sentence: "The account is unknown or inactive.", why: "No active account matches the provided identifier.", tone: "review" },
+  DELIVERY_FAILED: { code: "DELIVERY_FAILED", short_label: "Delivery failed", full_sentence: "Message delivery failed.", why: "The email or notification could not be delivered.", tone: "fail" },
+  EMAIL_SEND_ERROR: { code: "EMAIL_SEND_ERROR", short_label: "Email error", full_sentence: "An error occurred while sending the email.", why: "The email service returned an error during delivery.", tone: "fail" },
+  CONFIG_UPDATED: { code: "CONFIG_UPDATED", short_label: "Config updated", full_sentence: "A configuration setting was updated.", why: "An administrator changed a system configuration value.", tone: "pass" },
+  GRACEFUL_SHUTDOWN: { code: "GRACEFUL_SHUTDOWN", short_label: "Shutdown", full_sentence: "The service shut down gracefully.", why: "A controlled shutdown was completed, draining active requests.", tone: "pass" },
+  FENCING_TOKEN_MISMATCH: { code: "FENCING_TOKEN_MISMATCH", short_label: "Token mismatch", full_sentence: "A fencing token mismatch was detected.", why: "A concurrent operation used a stale fencing token, indicating a race condition.", tone: "fail" },
+
+  // ── Agent infrastructure ───────────────────────────────────────────
+  AGENT_OK: { code: "AGENT_OK", short_label: "Agent OK", full_sentence: "The agent completed its task successfully.", why: "The agent runtime reports successful execution.", tone: "pass" },
+  AGENT_ERROR: { code: "AGENT_ERROR", short_label: "Agent error", full_sentence: "The agent encountered an error.", why: "An unhandled error occurred during agent execution.", tone: "fail" },
+  AGENT_ITEM_ERROR: { code: "AGENT_ITEM_ERROR", short_label: "Item error", full_sentence: "An error occurred while processing this item.", why: "The agent failed on a specific candidate or record.", tone: "fail" },
+  AGENT_BATCH_COMPLETED: { code: "AGENT_BATCH_COMPLETED", short_label: "Batch done", full_sentence: "The processing batch has completed.", why: "All items in the batch have been processed.", tone: "pass" },
+  AGENT_BATCH_RESUMED: { code: "AGENT_BATCH_RESUMED", short_label: "Batch resumed", full_sentence: "The processing batch was resumed after interruption.", why: "A previously interrupted batch was restarted from its checkpoint.", tone: "pass" },
+  AGENT_CIRCUIT_OPEN: { code: "AGENT_CIRCUIT_OPEN", short_label: "Circuit open", full_sentence: "The agent's circuit breaker is open.", why: "Too many failures caused the circuit breaker to trip, pausing further calls.", tone: "fail" },
+  SUPERVISOR_RESTART: { code: "SUPERVISOR_RESTART", short_label: "Supervisor restart", full_sentence: "The supervisor restarted an agent.", why: "The supervisor detected a failed agent and initiated a restart.", tone: "review" },
+  SUPERVISOR_RESTARTS_EXHAUSTED: { code: "SUPERVISOR_RESTARTS_EXHAUSTED", short_label: "Restarts exhausted", full_sentence: "The supervisor has exhausted all restart attempts.", why: "The agent failed repeatedly and no more retries are allowed.", tone: "fail" },
+  PROCESS_UNSTABLE: { code: "PROCESS_UNSTABLE", short_label: "Unstable", full_sentence: "The agent process is unstable.", why: "Repeated crashes or health check failures indicate process instability.", tone: "fail" },
+
+  // ── Communication ──────────────────────────────────────────────────
+  CONTACT_CHANNEL_MISSING: { code: "CONTACT_CHANNEL_MISSING", short_label: "No channel", full_sentence: "No contact channel is available for this candidate.", why: "The candidate record has no email or phone number for communication.", tone: "review" },
+  DISPATCH_SUCCESS: { code: "DISPATCH_SUCCESS", short_label: "Dispatched", full_sentence: "The communication was dispatched successfully.", why: "A message was sent via the configured channel.", tone: "pass" },
+  TEMPLATE_LANGUAGE_MATCHED_CANDIDATE: { code: "TEMPLATE_LANGUAGE_MATCHED_CANDIDATE", short_label: "Lang matched", full_sentence: "The template language matched the candidate's preference.", why: "The communication template was selected based on the candidate's language.", tone: "pass" },
+  TEMPLATE_LANGUAGE_FALLBACK_TO_ORG_DEFAULT: { code: "TEMPLATE_LANGUAGE_FALLBACK_TO_ORG_DEFAULT", short_label: "Lang fallback", full_sentence: "The template fell back to the organization's default language.", why: "No template matched the candidate's language; the org default was used.", tone: "review" },
+  TEMPLATE_LANGUAGE_FALLBACK_TO_EN: { code: "TEMPLATE_LANGUAGE_FALLBACK_TO_EN", short_label: "English fallback", full_sentence: "The template fell back to English.", why: "No template matched the candidate's language or the org default; English was used.", tone: "review" },
+
+  // ── Offboarding ────────────────────────────────────────────────────
+  OFFBOARDING_CASE_STARTED: { code: "OFFBOARDING_CASE_STARTED", short_label: "Case started", full_sentence: "An offboarding case has been started.", why: "The offboarding process was initiated for this individual.", tone: "pass" },
+  OFFBOARDING_CASE_COMPLETED: { code: "OFFBOARDING_CASE_COMPLETED", short_label: "Case done", full_sentence: "The offboarding case has been completed.", why: "All offboarding steps have been fulfilled.", tone: "pass" },
+  OFFBOARDING_TEMPLATE_CREATED: { code: "OFFBOARDING_TEMPLATE_CREATED", short_label: "Template created", full_sentence: "An offboarding template was created.", why: "A new offboarding workflow template was defined.", tone: "pass" },
+  OFFBOARDING_TEMPLATE_UPDATED: { code: "OFFBOARDING_TEMPLATE_UPDATED", short_label: "Template updated", full_sentence: "An offboarding template was updated.", why: "An existing offboarding template was modified.", tone: "pass" },
+  STEP_COMPLETED_BY_ASSIGNEE: { code: "STEP_COMPLETED_BY_ASSIGNEE", short_label: "Step done", full_sentence: "An offboarding step was completed by the assignee.", why: "The person responsible marked this step as done.", tone: "pass" },
+  STEP_FLAGGED_OVERDUE: { code: "STEP_FLAGGED_OVERDUE", short_label: "Overdue", full_sentence: "An offboarding step has been flagged as overdue.", why: "The step's due date has passed without completion.", tone: "fail" },
+  STEP_DUE_REMINDER_SENT: { code: "STEP_DUE_REMINDER_SENT", short_label: "Reminder sent", full_sentence: "A reminder was sent for an upcoming offboarding step.", why: "An automated reminder was dispatched before the step's due date.", tone: "pass" },
+
+  // ── Applicant portal ───────────────────────────────────────────────
+  OTP_ISSUED: { code: "OTP_ISSUED", short_label: "OTP sent", full_sentence: "A one-time password was issued.", why: "An OTP was generated and sent to the applicant.", tone: "pass" },
+  OTP_NOT_FOUND: { code: "OTP_NOT_FOUND", short_label: "OTP not found", full_sentence: "The one-time password was not found.", why: "No matching OTP record exists for the provided code.", tone: "fail" },
+  OTP_EXPIRED: { code: "OTP_EXPIRED", short_label: "OTP expired", full_sentence: "The one-time password has expired.", why: "The OTP was not used within its validity window.", tone: "fail" },
+  OTP_MAX_ATTEMPTS_EXCEEDED: { code: "OTP_MAX_ATTEMPTS_EXCEEDED", short_label: "Max attempts", full_sentence: "The maximum number of OTP attempts has been exceeded.", why: "Too many incorrect OTP entries were attempted.", tone: "fail" },
+  OTP_MISMATCH: { code: "OTP_MISMATCH", short_label: "OTP mismatch", full_sentence: "The one-time password does not match.", why: "The entered OTP does not match the issued value.", tone: "fail" },
+  OTP_VERIFIED: { code: "OTP_VERIFIED", short_label: "OTP verified", full_sentence: "The one-time password was verified successfully.", why: "The applicant provided the correct OTP.", tone: "pass" },
+  STATUS_VIEW_SERVED: { code: "STATUS_VIEW_SERVED", short_label: "Status viewed", full_sentence: "The applicant's status view was served.", why: "The applicant portal rendered the current application status.", tone: "pass" },
+
+  // ── Reference checks (additional) ─────────────────────────────────
+  REFERENCE_REQUEST_CREATED: { code: "REFERENCE_REQUEST_CREATED", short_label: "Ref request created", full_sentence: "A reference check request was created.", why: "The system created a new reference request for this candidate.", tone: "pass" },
+  REFERENCE_REQUEST_SEND_FAILED: { code: "REFERENCE_REQUEST_SEND_FAILED", short_label: "Ref send failed", full_sentence: "Failed to send the reference check request.", why: "The reference request could not be delivered to the referee.", tone: "fail" },
+  REFERENCE_TEXT_EVIDENCE_ONLY: { code: "REFERENCE_TEXT_EVIDENCE_ONLY", short_label: "Text only", full_sentence: "The reference response contains text evidence only.", why: "The referee provided narrative feedback without structured ratings.", tone: "review" },
+  REFERENCE_YESNO_INVALID: { code: "REFERENCE_YESNO_INVALID", short_label: "Invalid Y/N", full_sentence: "The yes/no reference response is invalid.", why: "The referee provided an unexpected value for a yes/no question.", tone: "review" },
+  REFERENCE_YESNO_SCORED: { code: "REFERENCE_YESNO_SCORED", short_label: "Y/N scored", full_sentence: "The yes/no reference response has been scored.", why: "A yes/no answer was converted to a numerical score.", tone: "pass" },
+
+  // ── Rediscovery (additional) ───────────────────────────────────────
+  REDISCOVERY_RUN_COMPLETED: { code: "REDISCOVERY_RUN_COMPLETED", short_label: "Run done", full_sentence: "A rediscovery matching run has completed.", why: "The rediscovery agent finished scanning past candidates.", tone: "pass" },
+
+  // ── Reports ────────────────────────────────────────────────────────
+  REPORT_GENERATED: { code: "REPORT_GENERATED", short_label: "Report generated", full_sentence: "A report has been generated.", why: "The report agent compiled and exported the requested report.", tone: "pass" },
+
+  // ── Pipeline decisions ─────────────────────────────────────────────
+  COMMUNICATION_REJECTED: { code: "COMMUNICATION_REJECTED", short_label: "Comm rejected", full_sentence: "The communication was rejected by a reviewer.", why: "A human reviewer decided not to send the proposed communication.", tone: "human" },
+  FINAL_APPROVAL_REJECTED: { code: "FINAL_APPROVAL_REJECTED", short_label: "Approval rejected", full_sentence: "Final approval was rejected.", why: "A senior reviewer rejected the candidate at the final approval stage.", tone: "human" },
+  EXAM_PUBLISHED_HUMAN_APPROVAL: { code: "EXAM_PUBLISHED_HUMAN_APPROVAL", short_label: "Exam published", full_sentence: "The exam was published after human approval.", why: "A human reviewer approved the exam for publication.", tone: "human" },
+
   // ── Borderline (dynamic — matched by prefix) ───────────────────────
   // BORDERLINE_* codes are generated at runtime. The prefix handler below
   // catches any code starting with "BORDERLINE_".

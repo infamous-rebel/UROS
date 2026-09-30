@@ -30,7 +30,9 @@ const STATUS_MESSAGES: Record<number, string> = {
   422: "The data provided does not meet the rules.",
   429: "Too many requests. Please wait a moment.",
   500: "Something went wrong on our side.",
+  502: "The server received an invalid response. Please try again shortly.",
   503: "The service is temporarily unavailable. Please try again shortly.",
+  504: "The request timed out. Please try again in a moment.",
 };
 
 export function PlainError({ status, code, message, requestId, inline = false }: PlainErrorProps) {

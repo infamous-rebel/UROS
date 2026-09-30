@@ -247,6 +247,12 @@ Before declaring any screenshot batch complete:
 
 This ensures that evidence actually demonstrates different UI states (expanded vs collapsed, drawer open vs scrolled, health live vs sidebar scroll). Two screenshots proving different behaviors cannot be byte-identical.
 
+### Rule 22 — Commit every Quest spec before execution
+
+Before starting any Part of a Quest, the Quest spec must exist at `docs/quests/quest-NN.md` and be committed to git. The spec documents all Parts, deliverables, and verification criteria. A template at `docs/quests/TEMPLATE.md` defines the required structure.
+
+This ensures that context shifts (session crashes, hand-offs) do not lose the Quest plan. The spec is the single source of truth for what each Part delivers.
+
 
 ---
 

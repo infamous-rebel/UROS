@@ -115,6 +115,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const inputClass = "w-full rounded-md border border-border-soft bg-background px-3 py-1.5 text-sm text-text-primary focus:border-agent focus:outline-none focus:ring-1 focus:ring-agent";
+const inputClassError = "w-full rounded-md border border-danger bg-background px-3 py-1.5 text-sm text-text-primary focus:border-danger focus:outline-none focus:ring-1 focus:ring-danger";
+
+function FieldError({ message }: { message: string }) {
+  return <p className="mt-1 text-xs text-danger">{message}</p>;
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // ─── 1. Profile Tab ──────────────────────────────────────────────────
 
@@ -126,6 +133,7 @@ function ProfileTab() {
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [errors, setErrors] = useState<{ name?: string }>({});
 
   const load = useCallback(async () => {
     try {
@@ -146,6 +154,10 @@ function ProfileTab() {
   if (!user) return <EmptyState message="Could not load profile." />;
 
   async function handleSave() {
+    const errs: { name?: string } = {};
+    if (!name.trim()) errs.name = "This field is required.";
+    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
+    setErrors({});
     setSaving(true);
     try {
       await authedRequest(`${API_V1}/settings/me/profile`, {
@@ -166,7 +178,8 @@ function ProfileTab() {
     <div>
       <SectionTitle title="Profile" description="Your personal information and active sessions" />
       <Field label="Full Name">
-        <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
+        <input value={name} onChange={(e) => { setName(e.target.value); setErrors({}); }} className={errors.name ? inputClassError : inputClass} />
+        {errors.name && <FieldError message={errors.name} />}
       </Field>
       <Field label="Email">
         <input value={user.email} disabled className={`${inputClass} opacity-50`} />
@@ -285,6 +298,7 @@ function UsersTab() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [inviteRole, setInviteRole] = useState("RECRUITER");
+  const [inviteErrors, setInviteErrors] = useState<{ email?: string; name?: string }>({});
 
   const load = useCallback(async () => {
     try {
@@ -298,6 +312,12 @@ function UsersTab() {
   if (loading) return <p className="text-sm text-text-secondary">Loading users…</p>;
 
   async function handleInvite() {
+    const errs: { email?: string; name?: string } = {};
+    if (!inviteEmail.trim()) errs.email = "This field is required.";
+    else if (!EMAIL_RE.test(inviteEmail)) errs.email = "Must be a valid email address.";
+    if (!inviteName.trim()) errs.name = "This field is required.";
+    if (Object.keys(errs).length > 0) { setInviteErrors(errs); return; }
+    setInviteErrors({});
     try {
       await authedRequest(`${API_V1}/users/invite`, {
         method: "POST",
@@ -326,8 +346,8 @@ function UsersTab() {
 
       {showInvite && (
         <div className="mb-4 rounded-lg border border-agent/30 bg-background p-3">
-          <Field label="Email"><input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} className={inputClass} type="email" /></Field>
-          <Field label="Full Name"><input value={inviteName} onChange={(e) => setInviteName(e.target.value)} className={inputClass} /></Field>
+          <Field label="Email"><input value={inviteEmail} onChange={(e) => { setInviteEmail(e.target.value); setInviteErrors({}); }} className={inviteErrors.email ? inputClassError : inputClass} type="email" />{inviteErrors.email && <FieldError message={inviteErrors.email} />}</Field>
+          <Field label="Full Name"><input value={inviteName} onChange={(e) => { setInviteName(e.target.value); setInviteErrors({}); }} className={inviteErrors.name ? inputClassError : inputClass} />{inviteErrors.name && <FieldError message={inviteErrors.name} />}</Field>
           <Field label="Role">
             <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)} className={inputClass}>
               <option value="ADMIN">Admin</option>

@@ -7,14 +7,18 @@ import { useState } from "react";
 import { requestPasswordReset } from "../../api/auth";
 import { useI18n } from "../../i18n";
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export function ForgotPasswordScreen() {
   const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
+  const [touched, setTouched] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setTouched(true);
     if (!email.trim() || submitting) return;
     setSubmitting(true);
     try {
@@ -54,8 +58,15 @@ export function ForgotPasswordScreen() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-md border border-border-soft bg-background px-3 py-2 text-sm text-text-primary focus:border-agent focus:outline-none"
+            onBlur={() => setTouched(true)}
+            className={`mt-1 w-full rounded-md border ${touched && (!email.trim() || !EMAIL_RE.test(email)) ? "border-danger" : "border-border-soft"} bg-background px-3 py-2 text-sm text-text-primary focus:border-agent focus:outline-none`}
           />
+          {touched && !email.trim() && (
+            <p className="mt-1 text-xs text-danger">This field is required.</p>
+          )}
+          {touched && email.trim() && !EMAIL_RE.test(email) && (
+            <p className="mt-1 text-xs text-danger">Must be a valid email address.</p>
+          )}
           <button
             type="submit"
             disabled={submitting}

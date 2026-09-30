@@ -19,9 +19,11 @@ export function ChangePasswordScreen() {
   const [errorText, setErrorText] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [touched, setTouched] = useState<{ current?: boolean; next?: boolean; confirm?: boolean }>({});
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setTouched({ current: true, next: true, confirm: true });
     if (submitting) return;
     if (next !== confirm) {
       setMismatch(true);
@@ -83,8 +85,12 @@ export function ChangePasswordScreen() {
         required
         value={current}
         onChange={(e) => setCurrent(e.target.value)}
-        className="mt-1 w-full rounded-md border border-border-soft bg-background px-3 py-2 text-sm text-text-primary focus:border-agent focus:outline-none"
+        onBlur={() => setTouched((t) => ({ ...t, current: true }))}
+        className={`mt-1 w-full rounded-md border ${touched.current && !current ? "border-danger" : "border-border-soft"} bg-background px-3 py-2 text-sm text-text-primary focus:border-agent focus:outline-none`}
       />
+      {touched.current && !current && (
+        <p className="mt-1 text-xs text-danger">This field is required.</p>
+      )}
 
       <label className="mt-3 block text-xs font-medium text-text-secondary" htmlFor="pw-new">
         {t("auth.newPasswordLabel")}
@@ -97,8 +103,15 @@ export function ChangePasswordScreen() {
         minLength={10}
         value={next}
         onChange={(e) => setNext(e.target.value)}
-        className="mt-1 w-full rounded-md border border-border-soft bg-background px-3 py-2 text-sm text-text-primary focus:border-agent focus:outline-none"
+        onBlur={() => setTouched((t) => ({ ...t, next: true }))}
+        className={`mt-1 w-full rounded-md border ${touched.next && next.length < 10 ? "border-danger" : "border-border-soft"} bg-background px-3 py-2 text-sm text-text-primary focus:border-agent focus:outline-none`}
       />
+      {touched.next && !next && (
+        <p className="mt-1 text-xs text-danger">This field is required.</p>
+      )}
+      {touched.next && next && next.length < 10 && (
+        <p className="mt-1 text-xs text-danger">Must be at least 10 characters.</p>
+      )}
 
       <label className="mt-3 block text-xs font-medium text-text-secondary" htmlFor="pw-confirm">
         {t("auth.confirmPasswordLabel")}
@@ -110,8 +123,15 @@ export function ChangePasswordScreen() {
         required
         value={confirm}
         onChange={(e) => setConfirm(e.target.value)}
-        className="mt-1 w-full rounded-md border border-border-soft bg-background px-3 py-2 text-sm text-text-primary focus:border-agent focus:outline-none"
+        onBlur={() => setTouched((t) => ({ ...t, confirm: true }))}
+        className={`mt-1 w-full rounded-md border ${touched.confirm && confirm && next !== confirm ? "border-danger" : "border-border-soft"} bg-background px-3 py-2 text-sm text-text-primary focus:border-agent focus:outline-none`}
       />
+      {touched.confirm && !confirm && (
+        <p className="mt-1 text-xs text-danger">This field is required.</p>
+      )}
+      {touched.confirm && confirm && next !== confirm && (
+        <p className="mt-1 text-xs text-danger">Passwords do not match.</p>
+      )}
 
       {(mismatch || errorMessage) && (
         <p role="alert" className="mt-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
