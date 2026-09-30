@@ -188,7 +188,7 @@ jobs:
   # ─── E2E Fast: headless, every PR ──────────────────────────────────────────
   e2e-fast:
     name: E2E (headless, fast)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     if: github.event_name == 'pull_request'
     needs: ci
 
@@ -266,7 +266,7 @@ jobs:
   # ─── E2E Evidence: headed, screenshots + video, main + nightly ─────────────
   e2e-evidence:
     name: E2E (headed, screenshots)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     if: github.event_name == 'push' || github.event_name == 'schedule'
     needs: ci
 
@@ -328,13 +328,13 @@ jobs:
       - run: npx wait-on http://localhost:5173 --timeout 60000
 
       - name: Run Playwright (headed via xvfb, screenshots + video)
-        run: xvfb-run --auto-servernum npx playwright test --reporter=list --timeout=180000
+        run: npx playwright test --reporter=list --timeout=180000
         env:
           CI: "true"
 
       - name: Run screenshot curator
         timeout-minutes: 15
-        run: xvfb-run --auto-servernum npx playwright test --config=playwright.curator.config.ts --reporter=list
+        run: npx playwright test --config=playwright.curator.config.ts --reporter=list
         env:
           CI: "true"
 
