@@ -244,7 +244,9 @@ jobs:
 
       - name: Start UI server
         working-directory: src/ui
-        run: npx vite --port 5173 &
+        run: |
+          npm ci
+          npx vite --port 5173 &
       - run: npx wait-on http://localhost:5173 --timeout 60000
 
       - name: Run Playwright (headless, no screenshots)
@@ -320,7 +322,9 @@ jobs:
 
       - name: Start UI server
         working-directory: src/ui
-        run: npx vite --port 5173 &
+        run: |
+          npm ci
+          npx vite --port 5173 &
       - run: npx wait-on http://localhost:5173 --timeout 60000
 
       - name: Run Playwright (headed via xvfb, screenshots + video)
