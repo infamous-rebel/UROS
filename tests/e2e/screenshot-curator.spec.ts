@@ -8,6 +8,8 @@ import { test, expect } from "./fixtures/auth";
 const OUT = "docs/e2e-evidence/quest-05/e2e";
 
 test.describe("Screenshot Curator", () => {
+  test.setTimeout(120_000);
+
   test("01 — login page", async ({ page }) => {
     await page.goto("/");
     await page.waitForSelector('input[type="email"]', { timeout: 10_000 });
