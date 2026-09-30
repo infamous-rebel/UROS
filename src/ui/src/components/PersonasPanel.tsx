@@ -1,14 +1,16 @@
 import { usePersonas } from "../api/hooks_hr";
 import { getToken } from "../api/client";
 import { EmptyState } from "./EmptyState";
+import { useI18n } from "../i18n";
 
 export function PersonasPanel() {
   const { data, isLoading, isError } = usePersonas();
+  const { t } = useI18n();
 
-  if (!getToken()) return <EmptyState message="Connect with a dev token to view personas." />;
-  if (isLoading) return <EmptyState message="Loading personas…" />;
-  if (isError) return <EmptyState message="Could not reach the personas API." tone="danger" />;
-  if (!data || data.personas.length === 0) return <EmptyState message="No departmental personas defined yet." />;
+  if (!getToken()) return <EmptyState message={t("personas.connectToken")} />;
+  if (isLoading) return <EmptyState message={t("personas.loading")} />;
+  if (isError) return <EmptyState message={t("personas.apiError")} tone="danger" />;
+  if (!data || data.personas.length === 0) return <EmptyState message={t("personas.none")} />;
 
   return (
     <ul className="space-y-2">

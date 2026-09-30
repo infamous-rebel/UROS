@@ -1,25 +1,27 @@
 import { useKpiScores, useApproveKpiScore } from "../api/hooks_hr";
 import { getToken } from "../api/client";
 import { EmptyState } from "./EmptyState";
+import { useI18n } from "../i18n";
 
 export function KpiPanel() {
   const { data, isLoading, isError } = useKpiScores();
   const approve = useApproveKpiScore();
+  const { t } = useI18n();
 
-  if (!getToken()) return <EmptyState message="Connect with a dev token to view KPI scores." />;
-  if (isLoading) return <EmptyState message="Loading KPI scores…" />;
-  if (isError) return <EmptyState message="Could not reach the KPI API." tone="danger" />;
-  if (!data || data.kpi_scores.length === 0) return <EmptyState message="No KPI scores calculated yet." />;
+  if (!getToken()) return <EmptyState message={t("kpi.connectToken")} />;
+  if (isLoading) return <EmptyState message={t("kpi.loading")} />;
+  if (isError) return <EmptyState message={t("kpi.apiError")} tone="danger" />;
+  if (!data || data.kpi_scores.length === 0) return <EmptyState message={t("kpi.none")} />;
 
   return (
     <table className="w-full text-left text-sm">
       <thead>
         <tr className="border-b border-border-soft text-xs uppercase text-text-secondary">
-          <th className="py-2 pr-3">Period</th>
-          <th className="py-2 pr-3">Score</th>
-          <th className="py-2 pr-3">Band</th>
-          <th className="py-2 pr-3">Status</th>
-          <th className="py-2">Action</th>
+          <th className="py-2 pr-3">{t("kpi.col.period")}</th>
+          <th className="py-2 pr-3">{t("kpi.col.score")}</th>
+          <th className="py-2 pr-3">{t("kpi.col.band")}</th>
+          <th className="py-2 pr-3">{t("kpi.col.status")}</th>
+          <th className="py-2">{t("kpi.col.action")}</th>
         </tr>
       </thead>
       <tbody>
@@ -35,7 +37,7 @@ export function KpiPanel() {
                   onClick={() => approve.mutate({ id: s.score_id, decision: "APPROVE" })}
                   className="rounded bg-human px-2 py-1 text-xs font-medium text-white"
                 >
-                  Approve
+                  {t("kpi.approve")}
                 </button>
               )}
             </td>

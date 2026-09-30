@@ -1,6 +1,7 @@
 import { useTaskLogs, useUpdateTaskStatus, useApproveTaskClosure } from "../api/hooks_hr";
 import { getToken } from "../api/client";
 import { EmptyState } from "./EmptyState";
+import { useI18n } from "../i18n";
 
 const STATUS_COLOR: Record<string, string> = {
   TODO: "text-text-secondary",
@@ -13,11 +14,12 @@ export function TaskLogsPanel() {
   const { data, isLoading, isError } = useTaskLogs();
   const updateStatus = useUpdateTaskStatus();
   const approveClosure = useApproveTaskClosure();
+  const { t } = useI18n();
 
-  if (!getToken()) return <EmptyState message="Connect with a dev token to view tasks." />;
-  if (isLoading) return <EmptyState message="Loading tasks…" />;
-  if (isError) return <EmptyState message="Could not reach the task log API." tone="danger" />;
-  if (!data || data.tasks.length === 0) return <EmptyState message="No tasks logged yet." tone="success" />;
+  if (!getToken()) return <EmptyState message={t("tasks.connectToken")} />;
+  if (isLoading) return <EmptyState message={t("tasks.loading")} />;
+  if (isError) return <EmptyState message={t("tasks.apiError")} tone="danger" />;
+  if (!data || data.tasks.length === 0) return <EmptyState message={t("tasks.none")} tone="success" />;
 
   return (
     <table className="w-full text-left text-sm">
@@ -53,10 +55,10 @@ export function TaskLogsPanel() {
                   onClick={() => approveClosure.mutate(t.task_id)}
                   className="rounded bg-human px-2 py-1 text-xs font-medium text-white"
                 >
-                  Approve closure
+                  {t("tasks.approveClosure")}
                 </button>
               ) : (
-                <span className="text-xs text-success">Closed</span>
+                <span className="text-xs text-success">{t("tasks.closed")}</span>
               )}
             </td>
           </tr>

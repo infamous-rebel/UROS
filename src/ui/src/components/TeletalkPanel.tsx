@@ -9,12 +9,14 @@ import { useQuery } from "@tanstack/react-query";
 import { getToken, API_V1 } from "../api/client";
 import { getIcon } from "./navigation/iconRegistry";
 import { Icon } from "./navigation/Icon";
+import { useI18n } from "../i18n";
 
 type TeletalkTab = "sms" | "cvbank";
 
 export function TeletalkPanel() {
   const hasToken = !!getToken();
   const [activeTab, setActiveTab] = useState<TeletalkTab>("sms");
+  const { t } = useI18n();
 
   const { data: statusData, isLoading } = useQuery({
     queryKey: ["teletalk-status"],
@@ -36,7 +38,7 @@ export function TeletalkPanel() {
       <div className="flex items-center gap-2">
         <span className={`inline-block h-2 w-2 rounded-full ${configured ? "bg-success" : "bg-attention"}`} />
         <span className="text-xs text-text-secondary">
-          {isLoading ? "Checking…" : configured ? (statusData?.message ?? "Connected") : (statusData?.message ?? "Teletalk not connected")}
+          {isLoading ? t("teletalk.checking") : configured ? (statusData?.message ?? t("teletalk.connected")) : (statusData?.message ?? t("teletalk.notConnected"))}
         </span>
       </div>
 
@@ -46,26 +48,26 @@ export function TeletalkPanel() {
           onClick={() => setActiveTab("sms")}
           className={`rounded px-3 py-1.5 text-xs font-medium ${activeTab === "sms" ? "bg-agent text-white" : "bg-background text-text-secondary"}`}
         >
-          SMS Provider
+          {t("teletalk.smsTab")}
         </button>
         <button
           onClick={() => setActiveTab("cvbank")}
           className={`rounded px-3 py-1.5 text-xs font-medium ${activeTab === "cvbank" ? "bg-agent text-white" : "bg-background text-text-secondary"}`}
         >
-          CV Bank
+          {t("teletalk.cvBankTab")}
         </button>
       </div>
 
       {/* Content */}
       {!hasToken ? (
-        <p className="text-sm text-text-secondary">Sign in to access Teletalk intake.</p>
+        <p className="text-sm text-text-secondary">{t("teletalk.signIn")}</p>
       ) : !configured ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border-soft py-8">
           <Icon icon={getIcon("Phone")} size={24} tone="neutral" />
           <p className="max-w-sm text-center text-sm text-text-secondary">
-            {statusData?.message ?? "Teletalk not connected. Add SMS provider and CV Bank credentials in Settings → Integrations."}
+            {statusData?.message ?? t("teletalk.notConnected")}
           </p>
-          <p className="text-xs text-agent">Go to Settings → Integrations → Teletalk to configure.</p>
+          <p className="text-xs text-agent">{t("teletalk.configure")}</p>
         </div>
       ) : activeTab === "sms" ? (
         <SmsTestTab />

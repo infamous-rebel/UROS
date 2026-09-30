@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getToken, API_V1 } from "../api/client";
 import { getIcon } from "./navigation/iconRegistry";
 import { Icon } from "./navigation/Icon";
+import { useI18n } from "../i18n";
 
 type BdjobsTab = "scraper" | "csv" | "email" | "webhook";
 
@@ -22,6 +23,7 @@ const TABS: { key: BdjobsTab; label: string }[] = [
 export function BdjobsPanel() {
   const hasToken = !!getToken();
   const [activeTab, setActiveTab] = useState<BdjobsTab>("scraper");
+  const { t } = useI18n();
 
   const { data: statusData, isLoading } = useQuery({
     queryKey: ["bdjobs-status"],
@@ -43,7 +45,7 @@ export function BdjobsPanel() {
       <div className="flex items-center gap-2">
         <span className={`inline-block h-2 w-2 rounded-full ${configured ? "bg-success" : "bg-attention"}`} />
         <span className="text-xs text-text-secondary">
-          {isLoading ? "Checking…" : configured ? (statusData?.message ?? "Connected") : (statusData?.message ?? "Bdjobs not connected")}
+          {isLoading ? t("bdjobs.checking") : configured ? (statusData?.message ?? t("bdjobs.connected")) : (statusData?.message ?? t("bdjobs.notConnected"))}
         </span>
       </div>
 
@@ -64,14 +66,14 @@ export function BdjobsPanel() {
 
       {/* Content */}
       {!hasToken ? (
-        <p className="text-sm text-text-secondary">Sign in to access Bdjobs intake.</p>
+        <p className="text-sm text-text-secondary">{t("bdjobs.signIn")}</p>
       ) : !configured ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border-soft py-8">
           <Icon icon={getIcon("Briefcase")} size={24} tone="neutral" />
           <p className="max-w-sm text-center text-sm text-text-secondary">
-            {statusData?.message ?? "Bdjobs not connected. Add API credentials in Settings → Integrations."}
+            {statusData?.message ?? t("bdjobs.notConnected")}
           </p>
-          <p className="text-xs text-agent">Go to Settings → Integrations → Bdjobs to configure.</p>
+          <p className="text-xs text-agent">{t("bdjobs.configure")}</p>
         </div>
       ) : (
         <TabContent tab={activeTab} />
