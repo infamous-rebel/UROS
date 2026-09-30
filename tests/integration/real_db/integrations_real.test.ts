@@ -125,7 +125,7 @@ describe("Quest 04 — Integrations (real DB)", () => {
     } finally {
       await adminPool.end();
     }
-  });
+  }, 60_000);
 
   // ─── 1. Provider catalog ───────────────────────────────────────────
   it("GET /integrations/providers lists all 31 adapters, every one registered", async () => {
