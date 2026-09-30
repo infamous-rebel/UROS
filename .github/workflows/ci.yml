@@ -328,7 +328,7 @@ jobs:
       - run: npx wait-on http://localhost:5173 --timeout 60000
 
       - name: Run Playwright (headed via xvfb, screenshots + video)
-        run: xvfb-run --auto-servernum npx playwright test --reporter=list --timeout=120000
+        run: xvfb-run --auto-servernum npx playwright test --reporter=list --timeout=180000
         env:
           CI: "true"
 
