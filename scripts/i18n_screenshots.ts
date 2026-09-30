@@ -12,7 +12,7 @@ const BN = JSON.parse(readFileSync(resolve("src/ui/src/i18n/bn.json"), "utf8"));
 function t(dict: Record<string, string>, key: string, vars?: Record<string, string | number>): string {
   const tpl = dict[key] ?? key;
   if (!vars) return tpl;
-  return Object.entries(vars).reduce((a, [k, v]) => a.split(`{{${k}}`).join(String(v)), tpl);
+  return Object.entries(vars).reduce((a, [k, v]) => a.split(`{{${k}}}`).join(String(v)), tpl);
 }
 
 const CSS = `<style>
