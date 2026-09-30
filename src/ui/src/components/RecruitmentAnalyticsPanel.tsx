@@ -14,17 +14,18 @@ import {
   QualityHireSourceCost,
 } from "../hooks/hooks_analytics";
 import { getToken, API_V1 } from "../api/client";
+import { useI18n } from "../i18n";
 import { EmptyState } from "./EmptyState";
 import { DownloadButton } from "./DownloadButton";
 import { ReasonCode } from "./ReasonCode";
 
-const FUNNEL_STAGE_LABEL: Record<FunnelStage["stage"], string> = {
-  APPLIED: "Applied",
-  ELIGIBLE: "Eligible",
-  SCORED: "Scored",
-  SHORTLISTED: "Shortlisted",
-  COMMUNICATED: "Communicated",
-  SELECTED: "Selected",
+const FUNNEL_STAGE_LABEL_KEY: Record<FunnelStage["stage"], string> = {
+  APPLIED: "analytics.applied",
+  ELIGIBLE: "analytics.eligible",
+  SCORED: "analytics.scored",
+  SHORTLISTED: "analytics.shortlisted",
+  COMMUNICATED: "analytics.communicated",
+  SELECTED: "analytics.selected",
 };
 
 function pct(n: number, digits = 1): string {
@@ -32,8 +33,9 @@ function pct(n: number, digits = 1): string {
 }
 
 function FlagsList({ flags }: { flags: UnderperformanceFlag[] }) {
+  const { t } = useI18n();
   if (flags.length === 0) {
-    return <div className="text-xs text-success">No underperformance flags for this window.</div>;
+    return <div className="text-xs text-success">{t("analytics.noFlags")}</div>;
   }
   return (
     <div className="flex flex-col gap-2">
@@ -57,19 +59,20 @@ function FlagsList({ flags }: { flags: UnderperformanceFlag[] }) {
 }
 
 function SourceComparisonTable({ sources }: { sources: SourceEffectivenessMetrics[] }) {
+  const { t } = useI18n();
   if (sources.length === 0) {
-    return <EmptyState message="No candidates in this window yet — source comparison will populate once applications arrive." />;
+    return <EmptyState message={t("analytics.noSourceData")} />;
   }
   return (
     <div className="overflow-hidden rounded-lg border border-border-soft bg-surface">
       <table className="w-full text-left text-xs">
         <thead className="bg-background">
           <tr className="text-text-secondary">
-            <th className="px-3 py-2">Source</th>
-            <th className="px-3 py-2">Candidates</th>
-            <th className="px-3 py-2">Pass Rate</th>
-            <th className="px-3 py-2">Interview Rate</th>
-            <th className="px-3 py-2">Selection Rate</th>
+            <th className="px-3 py-2">{t("analytics.source")}</th>
+            <th className="px-3 py-2">{t("analytics.candidates")}</th>
+            <th className="px-3 py-2">{t("analytics.passRate")}</th>
+            <th className="px-3 py-2">{t("analytics.interviewRate")}</th>
+            <th className="px-3 py-2">{t("analytics.selectionRate")}</th>
           </tr>
         </thead>
         <tbody>
@@ -89,12 +92,13 @@ function SourceComparisonTable({ sources }: { sources: SourceEffectivenessMetric
 }
 
 function FunnelView({ stages }: { stages: FunnelStage[] }) {
+  const { t } = useI18n();
   const max = Math.max(1, ...stages.map((s) => s.count));
   return (
     <div className="flex flex-col gap-2">
       {stages.map((s) => (
         <div key={s.stage} className="flex items-center gap-3">
-          <div className="w-28 flex-shrink-0 text-xs text-text-secondary">{FUNNEL_STAGE_LABEL[s.stage]}</div>
+          <div className="w-28 flex-shrink-0 text-xs text-text-secondary">{t(FUNNEL_STAGE_LABEL_KEY[s.stage] as any)}</div>
           <div className="h-4 flex-1 overflow-hidden rounded bg-background">
             <div className="h-4 rounded bg-agent" style={{ width: `${Math.max(2, (s.count / max) * 100)}%` }} />
           </div>
@@ -106,18 +110,19 @@ function FunnelView({ stages }: { stages: FunnelStage[] }) {
 }
 
 function QualityHireTable({ sources }: { sources: QualityHireSourceCost[] }) {
+  const { t } = useI18n();
   if (sources.length === 0) {
-    return <EmptyState message="No cost or candidate data for this window yet — record source costs to see cost-per-quality-hire." />;
+    return <EmptyState message={t("analytics.noCostData")} />;
   }
   return (
     <div className="overflow-hidden rounded-lg border border-border-soft bg-surface">
       <table className="w-full text-left text-xs">
         <thead className="bg-background">
           <tr className="text-text-secondary">
-            <th className="px-3 py-2">Source</th>
-            <th className="px-3 py-2">Total Cost</th>
-            <th className="px-3 py-2">Quality Hires</th>
-            <th className="px-3 py-2">Cost / Quality Hire</th>
+            <th className="px-3 py-2">{t("analytics.source")}</th>
+            <th className="px-3 py-2">{t("analytics.totalCost")}</th>
+            <th className="px-3 py-2">{t("analytics.qualityHires")}</th>
+            <th className="px-3 py-2">{t("analytics.costPerHire")}</th>
           </tr>
         </thead>
         <tbody>
@@ -163,6 +168,7 @@ function ExportButtons({
 }
 
 function ConfigureAnalytics() {
+  const { t } = useI18n();
   const { data, isLoading, isError } = useAnalyticsConfig();
   const configure = useConfigureAnalytics();
   const [minPassRate, setMinPassRate] = useState("");
@@ -171,8 +177,8 @@ function ConfigureAnalytics() {
   const [minScore, setMinScore] = useState("");
   const [windowDays, setWindowDays] = useState("90");
 
-  if (isLoading) return <EmptyState message="Loading analytics configuration…" />;
-  if (isError) return <EmptyState message="Could not reach the analytics API." tone="danger" />;
+  if (isLoading) return <EmptyState message={t("analytics.loadingConfig")} />;
+  if (isError) return <EmptyState message={t("analytics.apiError")} tone="danger" />;
 
   const effective = data?.effective_quality_hire_definition;
   const effectiveWindow = data?.effective_default_time_window_days ?? 90;
@@ -194,7 +200,7 @@ function ConfigureAnalytics() {
 
   return (
     <div className="rounded-lg border border-border-soft bg-surface p-3">
-      <div className="mb-2 text-xs font-semibold text-text-primary">Quality-Hire Definition &amp; Thresholds</div>
+      <div className="mb-2 text-xs font-semibold text-text-primary">{t("analytics.qualityDefinition")}</div>
       <div className="mb-2 text-[11px] text-text-secondary">
         {data?.is_system_default ? "Using system defaults" : "Org-configured"} — hire statuses: {effective?.hire_statuses.join(", ")}
         {effective?.min_score !== null && effective?.min_score !== undefined ? `, min score ${effective.min_score}` : ""}, window{" "}
@@ -204,31 +210,31 @@ function ConfigureAnalytics() {
         <input
           value={minPassRate}
           onChange={(e) => setMinPassRate(e.target.value)}
-          placeholder="Min pass rate (0-1)"
+          placeholder={t("analytics.minPassPlaceholder")}
           className="rounded-md border border-border-soft bg-background px-2 py-1.5 text-xs"
         />
         <input
           value={minSelectionRate}
           onChange={(e) => setMinSelectionRate(e.target.value)}
-          placeholder="Min selection rate (0-1)"
+          placeholder={t("analytics.minSelectionPlaceholder")}
           className="rounded-md border border-border-soft bg-background px-2 py-1.5 text-xs"
         />
         <input
           value={maxCostPerHire}
           onChange={(e) => setMaxCostPerHire(e.target.value)}
-          placeholder="Max cost / quality hire"
+          placeholder={t("analytics.maxCostPlaceholder")}
           className="rounded-md border border-border-soft bg-background px-2 py-1.5 text-xs"
         />
         <input
           value={minScore}
           onChange={(e) => setMinScore(e.target.value)}
-          placeholder="Min score (optional)"
+          placeholder={t("analytics.minScorePlaceholder")}
           className="rounded-md border border-border-soft bg-background px-2 py-1.5 text-xs"
         />
         <input
           value={windowDays}
           onChange={(e) => setWindowDays(e.target.value)}
-          placeholder="Default window (days)"
+          placeholder={t("analytics.windowPlaceholder")}
           className="rounded-md border border-border-soft bg-background px-2 py-1.5 text-xs"
         />
       </div>
@@ -238,15 +244,16 @@ function ConfigureAnalytics() {
           onClick={submit}
           className="rounded-md bg-agent px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
         >
-          {configure.isPending ? "Saving…" : "Save Configuration"}
+          {configure.isPending ? t("analytics.saving") : t("analytics.saveConfig")}
         </button>
-        {configure.isError && <span className="text-xs text-danger">{(configure.error as Error)?.message ?? "Save failed."}</span>}
+        {configure.isError && <span className="text-xs text-danger">{(configure.error as Error)?.message ?? t("analytics.saveFailed")}</span>}
       </div>
     </div>
   );
 }
 
 function AddSourceCost() {
+  const { t } = useI18n();
   const addCost = useAddSourceCost();
   const [source, setSource] = useState<SourcePlatform>("bdjobs");
   const [campaignId, setCampaignId] = useState("");
@@ -261,7 +268,7 @@ function AddSourceCost() {
 
   return (
     <div className="rounded-lg border border-border-soft bg-surface p-3">
-      <div className="mb-2 text-xs font-semibold text-text-primary">Record Source Cost</div>
+      <div className="mb-2 text-xs font-semibold text-text-primary">{t("analytics.recordCost")}</div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <select
           value={source}
@@ -277,13 +284,13 @@ function AddSourceCost() {
         <input
           value={campaignId}
           onChange={(e) => setCampaignId(e.target.value)}
-          placeholder="Campaign ID (optional)"
+          placeholder={t("analytics.campaignPlaceholder")}
           className="rounded-md border border-border-soft bg-background px-2 py-1.5 text-xs"
         />
         <input
           value={cost}
           onChange={(e) => setCost(e.target.value)}
-          placeholder="Cost"
+          placeholder={t("analytics.cost")}
           className="rounded-md border border-border-soft bg-background px-2 py-1.5 text-xs"
         />
         <input
@@ -299,16 +306,17 @@ function AddSourceCost() {
           onClick={submit}
           className="rounded-md bg-human px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
         >
-          {addCost.isPending ? "Saving…" : "Add Cost Entry"}
+          {addCost.isPending ? t("analytics.saving") : t("analytics.addCost")}
         </button>
-        {addCost.isError && <span className="text-xs text-danger">{(addCost.error as Error)?.message ?? "Save failed."}</span>}
-        {addCost.isSuccess && <span className="text-xs text-success">Recorded.</span>}
+        {addCost.isError && <span className="text-xs text-danger">{(addCost.error as Error)?.message ?? t("analytics.saveFailed")}</span>}
+        {addCost.isSuccess && <span className="text-xs text-success">{t("analytics.recorded")}</span>}
       </div>
     </div>
   );
 }
 
 export function RecruitmentAnalyticsPanel() {
+  const { t } = useI18n();
   const [circularId, setCircularId] = useState("");
   const [windowDaysInput, setWindowDaysInput] = useState("");
   const activeCircularId = circularId.trim() || undefined;
@@ -318,7 +326,7 @@ export function RecruitmentAnalyticsPanel() {
   const funnel = useFunnelAnalysis(activeCircularId ?? null);
   const qualityHire = useQualityHireCost({ time_window_days: activeWindowDays });
 
-  if (!getToken()) return <EmptyState message="Connect with a dev token to use recruitment analytics." />;
+  if (!getToken()) return <EmptyState message={t("analytics.tokenRequired")} />;
 
   return (
     <div className="flex flex-col gap-4">
@@ -326,18 +334,18 @@ export function RecruitmentAnalyticsPanel() {
       <AddSourceCost />
 
       <div className="rounded-lg border border-border-soft bg-surface p-3">
-        <div className="mb-2 text-xs font-semibold text-text-primary">Report Filters</div>
+        <div className="mb-2 text-xs font-semibold text-text-primary">{t("analytics.reportFilters")}</div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <input
             value={circularId}
             onChange={(e) => setCircularId(e.target.value)}
-            placeholder="Circular ID (optional — narrows sources, required for funnel)"
+            placeholder={t("analytics.circularPlaceholder")}
             className="flex-1 rounded-md border border-border-soft bg-background px-2 py-1.5 text-xs text-text-primary"
           />
           <input
             value={windowDaysInput}
             onChange={(e) => setWindowDaysInput(e.target.value)}
-            placeholder="Time window (days, optional)"
+            placeholder={t("analytics.timeWindowPlaceholder")}
             className="w-56 rounded-md border border-border-soft bg-background px-2 py-1.5 text-xs text-text-primary"
           />
         </div>
@@ -346,17 +354,17 @@ export function RecruitmentAnalyticsPanel() {
       {/* Source effectiveness */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <div className="text-xs font-semibold text-text-primary">Source Comparison</div>
+          <div className="text-xs font-semibold text-text-primary">{t("analytics.sourceComparison")}</div>
           <ExportButtons report="sources" circularId={activeCircularId} timeWindowDays={activeWindowDays} />
         </div>
-        {sources.isLoading && <EmptyState message="Loading source effectiveness…" />}
-        {sources.isError && <EmptyState message="Could not reach the analytics API." tone="danger" />}
+        {sources.isLoading && <EmptyState message={t("analytics.loadingSources")} />}
+        {sources.isError && <EmptyState message={t("analytics.apiError")} tone="danger" />}
         {sources.data && (
           <>
             <SourceComparisonTable sources={sources.data.sources} />
             <div className="mt-2 text-[11px] text-text-secondary">{sources.data.reason_description}</div>
             <div className="mt-3">
-              <div className="mb-1 text-xs font-semibold text-text-primary">Underperformance Alerts</div>
+              <div className="mb-1 text-xs font-semibold text-text-primary">{t("analytics.underperformance")}</div>
               <FlagsList flags={sources.data.flags} />
             </div>
           </>
@@ -366,12 +374,12 @@ export function RecruitmentAnalyticsPanel() {
       {/* Funnel */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <div className="text-xs font-semibold text-text-primary">Funnel Analysis</div>
+          <div className="text-xs font-semibold text-text-primary">{t("analytics.funnel")}</div>
           {activeCircularId && <ExportButtons report="funnel" circularId={activeCircularId} />}
         </div>
-        {!activeCircularId && <EmptyState message="Enter a Circular ID above to see its funnel." />}
-        {activeCircularId && funnel.isLoading && <EmptyState message="Loading funnel…" />}
-        {activeCircularId && funnel.isError && <EmptyState message="Could not reach the analytics API." tone="danger" />}
+        {!activeCircularId && <EmptyState message={t("analytics.funnelPrompt")} />}
+        {activeCircularId && funnel.isLoading && <EmptyState message={t("analytics.loadingFunnel")} />}
+        {activeCircularId && funnel.isError && <EmptyState message={t("analytics.apiError")} tone="danger" />}
         {activeCircularId && funnel.data && (
           <div className="rounded-lg border border-border-soft bg-surface p-3">
             <FunnelView stages={funnel.data.stages} />
@@ -383,17 +391,17 @@ export function RecruitmentAnalyticsPanel() {
       {/* Cost per quality hire */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <div className="text-xs font-semibold text-text-primary">Cost Per Quality Hire</div>
+          <div className="text-xs font-semibold text-text-primary">{t("analytics.costPerQuality")}</div>
           <ExportButtons report="quality-hire" timeWindowDays={activeWindowDays} />
         </div>
-        {qualityHire.isLoading && <EmptyState message="Loading cost per quality hire…" />}
-        {qualityHire.isError && <EmptyState message="Could not reach the analytics API." tone="danger" />}
+        {qualityHire.isLoading && <EmptyState message={t("analytics.loadingCost")} />}
+        {qualityHire.isError && <EmptyState message={t("analytics.apiError")} tone="danger" />}
         {qualityHire.data && (
           <>
             <QualityHireTable sources={qualityHire.data.sources} />
             <div className="mt-2 text-[11px] text-text-secondary">{qualityHire.data.reason_description}</div>
             <div className="mt-3">
-              <div className="mb-1 text-xs font-semibold text-text-primary">Cost Alerts</div>
+              <div className="mb-1 text-xs font-semibold text-text-primary">{t("analytics.costAlerts")}</div>
               <FlagsList flags={qualityHire.data.flags} />
             </div>
           </>

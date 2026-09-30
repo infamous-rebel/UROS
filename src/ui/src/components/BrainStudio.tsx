@@ -17,6 +17,7 @@ import { API_V1, authedRequest } from "../api/client";
 import { getIcon } from "./navigation/iconRegistry";
 import { Icon } from "./navigation/Icon";
 import { ReasonCode } from "./ReasonCode";
+import { useI18n } from "../i18n";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -88,36 +89,36 @@ interface SimResult {
 
 // ─── Constants ───────────────────────────────────────────────────────
 
-const RULE_TYPE_SECTIONS: { key: RuleType; label: string; description: string }[] = [
-  { key: "ELIGIBILITY", label: "Eligibility", description: "Age, education, division, CGPA, nationality, quota" },
-  { key: "SCORING", label: "Scoring", description: "Weights, sub-criteria, thresholds" },
-  { key: "KNOCKOUT", label: "Knockout", description: "Auto-reject rules" },
-  { key: "QUOTA", label: "Quota", description: "Reserved seats" },
-  { key: "WORKFLOW", label: "Workflow", description: "Approval steps" },
+const RULE_TYPE_SECTIONS: { key: RuleType; labelKey: string; descriptionKey: string }[] = [
+  { key: "ELIGIBILITY", labelKey: "brain.sectionEligibility", descriptionKey: "brain.descEligibility" },
+  { key: "SCORING", labelKey: "brain.sectionScoring", descriptionKey: "brain.descScoring" },
+  { key: "KNOCKOUT", labelKey: "brain.sectionKnockout", descriptionKey: "brain.descKnockout" },
+  { key: "QUOTA", labelKey: "brain.sectionQuota", descriptionKey: "brain.descQuota" },
+  { key: "WORKFLOW", labelKey: "brain.sectionWorkflow", descriptionKey: "brain.descWorkflow" },
 ];
 
 const FIELD_OPTIONS = [
-  { value: "age", label: "Age" },
-  { value: "education.level", label: "Education Level" },
-  { value: "education.cgpa", label: "CGPA" },
-  { value: "division", label: "Division" },
-  { value: "nationality", label: "Nationality" },
-  { value: "quota", label: "Quota Category" },
-  { value: "experience.years", label: "Experience (years)" },
-  { value: "exam_score", label: "Exam Score" },
-  { value: "interview_score", label: "Interview Score" },
+  { value: "age", labelKey: "brain.fieldAge" },
+  { value: "education.level", labelKey: "brain.fieldEducation" },
+  { value: "education.cgpa", labelKey: "brain.fieldCgpa" },
+  { value: "division", labelKey: "brain.fieldDivision" },
+  { value: "nationality", labelKey: "brain.fieldNationality" },
+  { value: "quota", labelKey: "brain.fieldQuota" },
+  { value: "experience.years", labelKey: "brain.fieldExperience" },
+  { value: "exam_score", labelKey: "brain.fieldExamScore" },
+  { value: "interview_score", labelKey: "brain.fieldInterviewScore" },
 ];
 
 const OPERATOR_LABELS: Record<Operator, string> = {
-  EQ: "equals",
-  NEQ: "not equal to",
-  LT: "less than",
-  LTE: "at most",
-  GT: "greater than",
-  GTE: "at least",
-  IN: "one of",
-  NOT_IN: "not one of",
-  REGEX: "matches pattern",
+  EQ: "brain.opEq",
+  NEQ: "brain.opNeq",
+  LT: "brain.opLt",
+  LTE: "brain.opLte",
+  GT: "brain.opGt",
+  GTE: "brain.opGte",
+  IN: "brain.opIn",
+  NOT_IN: "brain.opNotIn",
+  REGEX: "brain.opRegex",
 };
 
 const REASON_SUGGESTIONS: Record<string, string> = {
@@ -133,18 +134,19 @@ const REASON_SUGGESTIONS: Record<string, string> = {
 
 // ─── Plain-language sentence builder ─────────────────────────────────
 
-function buildPlainSentence(rule: Partial<Rule>): string {
-  if (!rule.field_path || !rule.operator) return "Configure a new rule…";
-  const field = FIELD_OPTIONS.find((f) => f.value === rule.field_path)?.label ?? rule.field_path;
-  const op = OPERATOR_LABELS[rule.operator as Operator] ?? rule.operator;
+function buildPlainSentence(rule: Partial<Rule>, t: (key: string, vars?: Record<string, string | number>) => string): string {
+  if (!rule.field_path || !rule.operator) return t("brain.configureRule");
+  const field = t(FIELD_OPTIONS.find((f) => f.value === rule.field_path)?.labelKey ?? rule.field_path);
+  const op = t(OPERATOR_LABELS[rule.operator as Operator] ?? rule.operator);
   const val = rule.threshold_value !== undefined ? JSON.stringify(rule.threshold_value) : "___";
-  const knockout = rule.is_knockout ? " (auto-reject)" : "";
-  return `${field} must be ${op} ${val}${knockout}`;
+  const knockout = rule.is_knockout ? ` (${t("brain.autoReject")})` : "";
+  return t("brain.whyRule", { field, operator: `${op} ${val}` }) + knockout;
 }
 
 // ─── Top-level Brain Studio ──────────────────────────────────────────
 
 export function BrainStudio() {
+  const { t } = useI18n();
   const [packs, setPacks] = useState<RulePack[]>([]);
   const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -157,15 +159,15 @@ export function BrainStudio() {
       setPacks(data.rule_packs);
       setError(null);
     } catch (err: any) {
-      setError(err?.message ?? "Failed to load rule packs");
+      setError(err?.message ?? t("brain.loadFailed"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => { loadPacks(); }, [loadPacks]);
 
-  if (loading) return <div className="py-8 text-center text-sm text-text-secondary">Loading Brain Studio…</div>;
+  if (loading) return <div className="py-8 text-center text-sm text-text-secondary">{t("brain.loading")}</div>;
   if (error) return <div className="py-8 text-center text-sm text-danger">{error}</div>;
 
   if (selectedPackId) {
@@ -195,6 +197,7 @@ function RulesList({ packs, onSelect, onCreate }: {
   onSelect: (id: string) => void;
   onCreate: () => void;
 }) {
+  const { t } = useI18n();
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [newSector, setNewSector] = useState("GOVT_NONCADRE");
@@ -216,22 +219,22 @@ function RulesList({ packs, onSelect, onCreate }: {
     <div className="flex h-full flex-col">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-text-primary">Rule Packs</h3>
-          <p className="text-xs text-text-secondary">Configure eligibility, scoring, and knockout rules</p>
+          <h3 className="text-sm font-semibold text-text-primary">{t("brain.rulePacks")}</h3>
+          <p className="text-xs text-text-secondary">{t("brain.subtitle")}</p>
         </div>
         <button
           onClick={() => setCreating(!creating)}
           className="rounded-md bg-agent px-3 py-1.5 text-xs font-semibold text-white hover:bg-agent/90"
         >
-          {creating ? "Cancel" : "+ New Pack"}
+          {creating ? t("brain.cancel") : t("brain.newPack")}
         </button>
       </div>
 
       {creating && (
         <div className="mb-4 rounded-lg border border-agent/30 bg-surface p-4">
-          <h4 className="mb-2 text-xs font-semibold text-text-primary">Create Rule Pack</h4>
+          <h4 className="mb-2 text-xs font-semibold text-text-primary">{t("brain.createPack")}</h4>
           <div className="mb-2">
-            <label className="mb-1 block text-xs text-text-secondary">Name</label>
+            <label className="mb-1 block text-xs text-text-secondary">{t("brain.name")}</label>
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
@@ -240,16 +243,16 @@ function RulesList({ packs, onSelect, onCreate }: {
             />
           </div>
           <div className="mb-3">
-            <label className="mb-1 block text-xs text-text-secondary">Sector</label>
+            <label className="mb-1 block text-xs text-text-secondary">{t("brain.sector")}</label>
             <select
               value={newSector}
               onChange={(e) => setNewSector(e.target.value)}
               className="rounded-md border border-border-soft bg-background px-3 py-1.5 text-sm text-text-primary"
             >
-              <option value="GOVT_NONCADRE">Govt (Non-Cadre)</option>
-              <option value="GOVT_CADRE">Govt (Cadre)</option>
-              <option value="PRIVATE">Private</option>
-              <option value="NGO">NGO</option>
+              <option value="GOVT_NONCADRE">{t("brain.sectorGovtNon")}</option>
+              <option value="GOVT_CADRE">{t("brain.sectorGovt")}</option>
+              <option value="PRIVATE">{t("brain.sectorPrivate")}</option>
+              <option value="NGO">{t("brain.sectorNgo")}</option>
             </select>
           </div>
           <button
@@ -257,7 +260,7 @@ function RulesList({ packs, onSelect, onCreate }: {
             disabled={!newName.trim()}
             className="rounded-md bg-agent px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
           >
-            Create
+            {t("brain.create")}
           </button>
         </div>
       )}
@@ -266,8 +269,8 @@ function RulesList({ packs, onSelect, onCreate }: {
         <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border-soft py-10">
           <div className="text-center">
             <div className="mb-2 text-3xl"><Icon icon={getIcon("Brain")} size={32} tone="system" className="mx-auto" /></div>
-            <p className="text-sm font-medium text-text-secondary">No rule packs yet</p>
-            <p className="mt-1 text-xs text-text-secondary">Create your first pack to start configuring rules.</p>
+            <p className="text-sm font-medium text-text-secondary">{t("brain.noPacks")}</p>
+            <p className="mt-1 text-xs text-text-secondary">{t("brain.noPacksHint")}</p>
           </div>
         </div>
       ) : (
@@ -282,16 +285,16 @@ function RulesList({ packs, onSelect, onCreate }: {
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-text-primary">{pack.name}</span>
                   {pack.is_active && (
-                    <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">Active</span>
+                    <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">{t("brain.active")}</span>
                   )}
                 </div>
                 <div className="flex items-center gap-3 text-xs text-text-secondary">
                   <span>v{pack.latest_version ?? 1}</span>
-                  <span>{pack.version_count ?? 1} versions</span>
+                  <span>{t("brain.versions", { count: pack.version_count ?? 1 })}</span>
                 </div>
               </div>
               <div className="mt-1 text-xs text-text-secondary">
-                {pack.sector} · Created {new Date(pack.created_at).toLocaleDateString()}
+                {pack.sector} · {t("brain.created")} {new Date(pack.created_at).toLocaleDateString()}
               </div>
             </button>
           ))}
@@ -309,6 +312,7 @@ function RulePackEditor({ packId, pack, onBack, onChanged }: {
   onBack: () => void;
   onChanged: () => void;
 }) {
+  const { t } = useI18n();
   const [versions, setVersions] = useState<RulePackVersion[]>([]);
   const [rules, setRules] = useState<Rule[]>([]);
   const [latestVersionId, setLatestVersionId] = useState<string | null>(null);
@@ -342,7 +346,7 @@ function RulePackEditor({ packId, pack, onBack, onChanged }: {
 
   useEffect(() => { loadDetail(); }, [loadDetail]);
 
-  if (loading) return <div className="py-8 text-center text-sm text-text-secondary">Loading editor…</div>;
+  if (loading) return <div className="py-8 text-center text-sm text-text-secondary">{t("brain.loadingEditor")}</div>;
 
   const filteredRules = rules.filter((r) => r.rule_type === activeSection);
 
@@ -351,10 +355,10 @@ function RulePackEditor({ packId, pack, onBack, onChanged }: {
       {/* Header */}
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="text-xs text-text-secondary hover:text-text-primary">← Packs</button>
-          <h3 className="text-sm font-semibold text-text-primary">{pack?.name ?? "Rule Pack"}</h3>
+          <button onClick={onBack} className="text-xs text-text-secondary hover:text-text-primary">← {t("brain.backToPacks")}</button>
+          <h3 className="text-sm font-semibold text-text-primary">{pack?.name ?? t("brain.rulePack")}</h3>
           {pack?.is_active && (
-            <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">Active</span>
+            <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">{t("brain.active")}</span>
           )}
         </div>
         <div className="flex gap-2">
@@ -362,7 +366,7 @@ function RulePackEditor({ packId, pack, onBack, onChanged }: {
             onClick={() => setShowSimulation(!showSimulation)}
             className="rounded-md border border-border-soft px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-background"
           >
-            {showSimulation ? "Hide Simulator" : "Simulate"}
+            {showSimulation ? t("brain.hideSimulator") : t("brain.simulate")}
           </button>
           <PublishButton
             packId={packId}
@@ -394,21 +398,21 @@ function RulePackEditor({ packId, pack, onBack, onChanged }: {
                   activeSection === s.key ? "bg-agent text-white" : "text-text-secondary hover:bg-background"
                 }`}
               >
-                {s.label}
+                {t(s.labelKey)}
               </button>
             ))}
           </div>
 
           {/* Section description */}
           <p className="mb-2 text-xs text-text-secondary">
-            {RULE_TYPE_SECTIONS.find((s) => s.key === activeSection)?.description}
+            {t(RULE_TYPE_SECTIONS.find((s) => s.key === activeSection)?.descriptionKey ?? "")}
           </p>
 
           {/* Rules list */}
           <div className="flex-1 space-y-2 overflow-auto">
             {filteredRules.length === 0 ? (
               <div className="rounded-md border border-dashed border-border-soft py-6 text-center">
-                <p className="text-xs text-text-secondary">No {activeSection.toLowerCase()} rules yet</p>
+                <p className="text-xs text-text-secondary">{t("brain.noRules", { type: activeSection.toLowerCase() })}</p>
               </div>
             ) : (
               filteredRules.map((rule) => (
@@ -460,7 +464,7 @@ function RulePackEditor({ packId, pack, onBack, onChanged }: {
               onClick={() => setShowRuleEditor(true)}
               className="mt-3 rounded-md border border-dashed border-border-soft py-2 text-xs font-medium text-text-secondary hover:border-agent/50 hover:text-agent"
             >
-              + Add {activeSection} Rule
+              {t("brain.addRule", { type: activeSection })}
             </button>
           )}
 
@@ -492,8 +496,9 @@ function RuleCard({ rule, onToggle, onDelete, onClone }: {
   onDelete: () => void;
   onClone: () => void;
 }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
-  const sentence = buildPlainSentence(rule);
+  const sentence = buildPlainSentence(rule, t);
 
   return (
     <div className={`rounded-lg border ${rule.active ? "border-border-soft" : "border-border-soft opacity-50"} bg-surface p-3`}>
@@ -510,12 +515,12 @@ function RuleCard({ rule, onToggle, onDelete, onClone }: {
               rule.active ? "bg-success/10 text-success" : "bg-text-secondary/10 text-text-secondary"
             }`}
           >
-            {rule.active ? "Active" : "Paused"}
+            {rule.active ? t("brain.active") : t("brain.paused")}
           </button>
           {/* Clone */}
-          <button onClick={onClone} className="text-xs text-text-secondary hover:text-agent" title="Clone"><Icon icon={getIcon("Copy")} size={14} tone="neutral" /></button>
+          <button onClick={onClone} className="text-xs text-text-secondary hover:text-agent" title={t("brain.clone")}><Icon icon={getIcon("Copy")} size={14} tone="neutral" /></button>
           {/* Delete */}
-          <button onClick={onDelete} className="text-xs text-text-secondary hover:text-human" title="Deactivate"><Icon icon={getIcon("X")} size={14} tone="neutral" /></button>
+          <button onClick={onDelete} className="text-xs text-text-secondary hover:text-human" title={t("brain.deactivate")}><Icon icon={getIcon("X")} size={14} tone="neutral" /></button>
           {/* Expand */}
           <button onClick={() => setExpanded(!expanded)} className="text-xs text-text-secondary hover:text-text-primary">
             <Icon icon={getIcon(expanded ? "ChevronUp" : "ChevronDown")} size={14} tone="neutral" />
@@ -525,20 +530,20 @@ function RuleCard({ rule, onToggle, onDelete, onClone }: {
       {/* Metadata row */}
       <div className="mt-1 flex gap-3 text-xs text-text-secondary">
         <span className="rounded bg-agent/10 px-1.5 py-0.5">{rule.rule_type}</span>
-        <span>{rule.field_path} {OPERATOR_LABELS[rule.operator]} {JSON.stringify(rule.threshold_value)}</span>
-        {rule.is_knockout && <span className="text-human">Knockout</span>}
-        {rule.weight != null && <span>Weight: {rule.weight}</span>}
+        <span>{rule.field_path} {t(OPERATOR_LABELS[rule.operator])} {JSON.stringify(rule.threshold_value)}</span>
+        {rule.is_knockout && <span className="text-human">{t("brain.knockout")}</span>}
+        {rule.weight != null && <span>{t("brain.weight")}: {rule.weight}</span>}
       </div>
       {/* Expanded detail */}
       {expanded && (
         <div className="mt-2 rounded bg-background p-2 text-xs text-text-secondary">
-          <p><strong>Rule Code:</strong> {rule.rule_code}</p>
-          <p><strong>Fail Reason:</strong> <ReasonCode code={rule.fail_reason_code} size="sm" /></p>
-          <p><strong>Min Confidence:</strong> {rule.min_confidence_threshold}</p>
-          {rule.review_margin != null && <p><strong>Review Margin:</strong> ±{rule.review_margin}</p>}
+          <p><strong>{t("brain.ruleCode")}:</strong> {rule.rule_code}</p>
+          <p><strong>{t("brain.failReason")}:</strong> <ReasonCode code={rule.fail_reason_code} size="sm" /></p>
+          <p><strong>{t("brain.minConfidence")}:</strong> {rule.min_confidence_threshold}</p>
+          {rule.review_margin != null && <p><strong>{t("brain.reviewMargin")}:</strong> ±{rule.review_margin}</p>}
           <p className="mt-1">
             <a href="#" className="text-agent hover:underline" onClick={(e) => e.preventDefault()}>
-              Why? This rule checks {rule.field_path} using the {rule.operator} operator.
+              {t("brain.whyRule", { field: rule.field_path, operator: rule.operator })}
             </a>
           </p>
         </div>
@@ -555,6 +560,7 @@ function RuleEditor({ versionId, defaultType, onSaved, onCancel }: {
   onSaved: () => void;
   onCancel: () => void;
 }) {
+  const { t } = useI18n();
   const [step, setStep] = useState(1);
   const [fieldPath, setFieldPath] = useState("");
   const [operator, setOperator] = useState<Operator>("GTE");
@@ -602,24 +608,24 @@ function RuleEditor({ versionId, defaultType, onSaved, onCancel }: {
       });
       onSaved();
     } catch (err: any) {
-      setError(err?.message ?? "Failed to save rule");
+      setError(err?.message ?? t("brain.saveFailed"));
     } finally {
       setSaving(false);
     }
   }
 
   const steps = [
-    { num: 1, label: "Field" },
-    { num: 2, label: "Operator" },
-    { num: 3, label: "Value" },
-    { num: 4, label: "Settings" },
-    { num: 5, label: "Reason" },
-    { num: 6, label: "Preview" },
+    { num: 1, labelKey: "brain.stepField" },
+    { num: 2, labelKey: "brain.stepOperator" },
+    { num: 3, labelKey: "brain.stepValue" },
+    { num: 4, labelKey: "brain.stepSettings" },
+    { num: 5, labelKey: "brain.stepReason" },
+    { num: 6, labelKey: "brain.stepPreview" },
   ];
 
   return (
     <div className="rounded-lg border border-agent/30 bg-surface p-4">
-      <h4 className="mb-3 text-xs font-semibold text-text-primary">New Rule</h4>
+      <h4 className="mb-3 text-xs font-semibold text-text-primary">{t("brain.newRule")}</h4>
 
       {/* Step indicators */}
       <div className="mb-4 flex gap-1">
@@ -631,7 +637,7 @@ function RuleEditor({ versionId, defaultType, onSaved, onCancel }: {
               step === s.num ? "bg-agent text-white" : "bg-background text-text-secondary"
             }`}
           >
-            {s.num}. {s.label}
+            {s.num}. {t(s.labelKey)}
           </button>
         ))}
       </div>
@@ -639,21 +645,21 @@ function RuleEditor({ versionId, defaultType, onSaved, onCancel }: {
       {/* Step content */}
       {step === 1 && (
         <div>
-          <label className="mb-1 block text-xs text-text-secondary">Pick a candidate field</label>
+          <label className="mb-1 block text-xs text-text-secondary">{t("brain.pickField")}</label>
           <select
             value={fieldPath}
             onChange={(e) => setFieldPath(e.target.value)}
             className="w-full rounded-md border border-border-soft bg-background px-3 py-2 text-sm text-text-primary"
           >
-            <option value="">Select field…</option>
-            {FIELD_OPTIONS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+            <option value="">{t("brain.selectField")}</option>
+            {FIELD_OPTIONS.map((f) => <option key={f.value} value={f.value}>{t(f.labelKey)}</option>)}
           </select>
         </div>
       )}
 
       {step === 2 && (
         <div>
-          <label className="mb-1 block text-xs text-text-secondary">Pick an operator</label>
+          <label className="mb-1 block text-xs text-text-secondary">{t("brain.pickOperator")}</label>
           <div className="grid grid-cols-3 gap-2">
             {(["EQ", "NEQ", "LT", "LTE", "GT", "GTE", "IN", "NOT_IN", "REGEX"] as Operator[]).map((op) => (
               <button
@@ -663,7 +669,7 @@ function RuleEditor({ versionId, defaultType, onSaved, onCancel }: {
                   operator === op ? "border-agent bg-agent/10 text-agent" : "border-border-soft text-text-secondary hover:bg-background"
                 }`}
               >
-                {op} <span className="text-text-secondary">({OPERATOR_LABELS[op]})</span>
+                {op} <span className="text-text-secondary">({t(OPERATOR_LABELS[op])})</span>
               </button>
             ))}
           </div>
@@ -672,7 +678,7 @@ function RuleEditor({ versionId, defaultType, onSaved, onCancel }: {
 
       {step === 3 && (
         <div>
-          <label className="mb-1 block text-xs text-text-secondary">Enter threshold value</label>
+          <label className="mb-1 block text-xs text-text-secondary">{t("brain.enterThreshold")}</label>
           <input
             value={thresholdValue}
             onChange={(e) => setThresholdValue(e.target.value)}
@@ -680,7 +686,7 @@ function RuleEditor({ versionId, defaultType, onSaved, onCancel }: {
             placeholder={operator === "IN" ? '["Dhaka","Chittagong"]' : "e.g. 30"}
           />
           <p className="mt-1 text-xs text-text-secondary">
-            {fieldPath && `${FIELD_OPTIONS.find((f) => f.value === fieldPath)?.label ?? fieldPath} ${OPERATOR_LABELS[operator]} ${thresholdValue || "___"}`}
+            {fieldPath && `${t(FIELD_OPTIONS.find((f) => f.value === fieldPath)?.labelKey ?? fieldPath)} ${t(OPERATOR_LABELS[operator])} ${thresholdValue || "___"}`}
           </p>
         </div>
       )}
@@ -689,11 +695,11 @@ function RuleEditor({ versionId, defaultType, onSaved, onCancel }: {
         <div className="space-y-3">
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={isKnockout} onChange={(e) => setIsKnockout(e.target.checked)} />
-            <span className="text-xs text-text-primary">Knockout rule (auto-reject on failure)</span>
+            <span className="text-xs text-text-primary">{t("brain.knockoutRule")}</span>
           </label>
           {defaultType === "SCORING" && (
             <div>
-              <label className="mb-1 block text-xs text-text-secondary">Weight</label>
+              <label className="mb-1 block text-xs text-text-secondary">{t("brain.weight")}</label>
               <input
                 type="number"
                 value={weight}
@@ -708,7 +714,7 @@ function RuleEditor({ versionId, defaultType, onSaved, onCancel }: {
 
       {step === 5 && (
         <div>
-          <label className="mb-1 block text-xs text-text-secondary">Fail reason code</label>
+          <label className="mb-1 block text-xs text-text-secondary">{t("brain.failReasonCode")}</label>
           <input
             value={failReasonCode}
             onChange={(e) => setFailReasonCode(e.target.value)}
@@ -716,16 +722,16 @@ function RuleEditor({ versionId, defaultType, onSaved, onCancel }: {
             placeholder="e.g. AGE_BELOW_THRESHOLD"
           />
           <p className="mt-1 text-xs text-text-secondary">
-            Suggested: {REASON_SUGGESTIONS[`${fieldPath}.${operator}`] ?? "MANUAL_REVIEW_REQUIRED"}
+            {t("brain.suggested")}: {REASON_SUGGESTIONS[`${fieldPath}.${operator}`] ?? "MANUAL_REVIEW_REQUIRED"}
           </p>
         </div>
       )}
 
       {step === 6 && (
         <div>
-          <label className="mb-1 block text-xs text-text-secondary">Preview</label>
+          <label className="mb-1 block text-xs text-text-secondary">{t("brain.preview")}</label>
           <div className="rounded-md border border-border-soft bg-background p-3">
-            <p className="text-sm font-medium text-text-primary">{buildPlainSentence(previewRule)}</p>
+            <p className="text-sm font-medium text-text-primary">{buildPlainSentence(previewRule, t)}</p>
             <div className="mt-2 text-xs text-text-secondary">
               <p>Type: {isKnockout ? "KNOCKOUT" : defaultType}</p>
               <p>Reason: {failReasonCode || "MANUAL_REVIEW_REQUIRED"}</p>
@@ -739,16 +745,16 @@ function RuleEditor({ versionId, defaultType, onSaved, onCancel }: {
 
       {/* Actions */}
       <div className="mt-4 flex justify-between">
-        <button onClick={onCancel} className="text-xs text-text-secondary hover:text-text-primary">Cancel</button>
+        <button onClick={onCancel} className="text-xs text-text-secondary hover:text-text-primary">{t("brain.cancel")}</button>
         <div className="flex gap-2">
           {step > 1 && (
             <button onClick={() => setStep(step - 1)} className="rounded-md border border-border-soft px-3 py-1.5 text-xs text-text-secondary hover:bg-background">
-              Back
+              {t("brain.back")}
             </button>
           )}
           {step < 6 ? (
             <button onClick={() => setStep(step + 1)} className="rounded-md bg-agent px-3 py-1.5 text-xs font-semibold text-white">
-              Next
+              {t("brain.next")}
             </button>
           ) : (
             <button
@@ -756,7 +762,7 @@ function RuleEditor({ versionId, defaultType, onSaved, onCancel }: {
               disabled={saving || !fieldPath || !thresholdValue}
               className="rounded-md bg-agent px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
             >
-              {saving ? "Saving…" : "Save Rule"}
+              {saving ? t("brain.saving") : t("brain.saveRule")}
             </button>
           )}
         </div>
@@ -768,6 +774,7 @@ function RuleEditor({ versionId, defaultType, onSaved, onCancel }: {
 // ─── ConflictChecker (banner) ────────────────────────────────────────
 
 function ConflictBanner({ conflicts, rules }: { conflicts: Conflict[]; rules: Rule[] }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -776,14 +783,14 @@ function ConflictBanner({ conflicts, rules }: { conflicts: Conflict[]; rules: Ru
         <div className="flex items-center gap-2">
           <span className="text-human"><Icon icon={getIcon("AlertTriangle")} size={16} tone="human" /></span>
           <span className="text-sm font-semibold text-human">
-            {conflicts.length} conflict{conflicts.length !== 1 ? "s" : ""} detected
+            {t("brain.conflictsDetected", { count: conflicts.length })}
           </span>
         </div>
         <button onClick={() => setExpanded(!expanded)} className="text-xs text-human hover:underline">
-          {expanded ? "Hide" : "Details"}
+          {expanded ? t("brain.hide") : t("brain.details")}
         </button>
       </div>
-      <p className="mt-1 text-xs text-text-secondary">Publish is blocked until all conflicts are resolved.</p>
+      <p className="mt-1 text-xs text-text-secondary">{t("brain.publishBlocked")}</p>
       {expanded && (
         <div className="mt-2 space-y-1">
           {conflicts.map((c, i) => {
@@ -793,8 +800,8 @@ function ConflictBanner({ conflicts, rules }: { conflicts: Conflict[]; rules: Ru
               <div key={i} className="rounded bg-background p-2 text-xs">
                 <p className="font-medium text-human">{c.reason}</p>
                 <div className="mt-1 flex gap-4 text-text-secondary">
-                  <span>Rule A: <a href="#" className="text-agent hover:underline" onClick={(e) => e.preventDefault()}>{ruleA?.rule_code ?? c.rule_a}</a></span>
-                  <span>Rule B: <a href="#" className="text-agent hover:underline" onClick={(e) => e.preventDefault()}>{ruleB?.rule_code ?? c.rule_b}</a></span>
+                  <span>{t("brain.ruleA")}: <a href="#" className="text-agent hover:underline" onClick={(e) => e.preventDefault()}>{ruleA?.rule_code ?? c.rule_a}</a></span>
+                  <span>{t("brain.ruleB")}: <a href="#" className="text-agent hover:underline" onClick={(e) => e.preventDefault()}>{ruleB?.rule_code ?? c.rule_b}</a></span>
                 </div>
               </div>
             );
@@ -808,11 +815,12 @@ function ConflictBanner({ conflicts, rules }: { conflicts: Conflict[]; rules: Ru
 // ─── VersionHistory ──────────────────────────────────────────────────
 
 function VersionHistory({ versions }: { versions: RulePackVersion[] }) {
+  const { t } = useI18n();
   if (versions.length === 0) return null;
 
   return (
     <div className="rounded-lg border border-border-soft bg-surface p-3">
-      <h4 className="mb-2 text-xs font-semibold text-text-primary">Version History</h4>
+      <h4 className="mb-2 text-xs font-semibold text-text-primary">{t("brain.versionHistory")}</h4>
       <div className="space-y-0">
         {versions.map((v, i) => (
           <div key={v.version_id} className="relative flex gap-3 pb-4">
@@ -828,14 +836,14 @@ function VersionHistory({ versions }: { versions: RulePackVersion[] }) {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-text-primary">v{v.version_number}</span>
-                {i === 0 && <span className="rounded bg-agent/10 px-1.5 py-0.5 text-[10px] text-agent">Latest</span>}
+                {i === 0 && <span className="rounded bg-agent/10 px-1.5 py-0.5 text-[10px] text-agent">{t("brain.latest")}</span>}
               </div>
               {v.change_summary && (
                 <p className="mt-0.5 truncate text-xs text-text-secondary">{v.change_summary}</p>
               )}
               <p className="text-[10px] text-text-secondary/60">
                 {new Date(v.created_at).toLocaleString()}
-                {v.rule_count !== undefined && ` · ${v.rule_count} rules`}
+                {v.rule_count !== undefined && ` · ${t("brain.rules", { count: v.rule_count })}`}
               </p>
             </div>
           </div>
@@ -852,6 +860,7 @@ function SimulationPanel({ packId, versionId, onClose }: {
   versionId: string;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const [candidates, setCandidates] = useState([
     { name: "Sample 1", age: 28, cgpa: 3.5, nationality: "Bangladeshi" },
     { name: "Sample 2", age: 35, cgpa: 2.8, nationality: "Bangladeshi" },
@@ -880,7 +889,7 @@ function SimulationPanel({ packId, versionId, onClose }: {
       setResults(data.results);
       setSummary(data.summary);
     } catch (err: any) {
-      setError(err?.message ?? "Simulation failed");
+      setError(err?.message ?? t("brain.simFailed"));
     } finally {
       setRunning(false);
     }
@@ -896,12 +905,12 @@ function SimulationPanel({ packId, versionId, onClose }: {
   return (
     <div className="mb-4 rounded-lg border border-agent/20 bg-surface p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h4 className="text-xs font-semibold text-text-primary">Simulation Panel</h4>
+        <h4 className="text-xs font-semibold text-text-primary">{t("brain.simPanel")}</h4>
         <button onClick={onClose} className="text-xs text-text-secondary hover:text-text-primary"><Icon icon={getIcon("X")} size={14} tone="neutral" /></button>
       </div>
 
       <p className="mb-2 text-xs text-text-secondary">
-        Test rules against sample candidates. Nothing is saved to the database.
+        {t("brain.simHint")}
       </p>
 
       {/* Sample candidates */}
@@ -944,7 +953,7 @@ function SimulationPanel({ packId, versionId, onClose }: {
         disabled={running}
         className="mb-3 rounded-md bg-agent px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
       >
-        {running ? "Running…" : "Run Simulation"}
+        {running ? t("brain.running") : t("brain.runSim")}
       </button>
 
       {error && <p className="mb-2 text-xs text-danger">{error}</p>}
@@ -953,24 +962,24 @@ function SimulationPanel({ packId, versionId, onClose }: {
       {results && summary && (
         <div>
           <div className="mb-2 flex gap-3 text-xs">
-            <span className="rounded bg-success/10 px-2 py-0.5 text-success">{summary.pass} pass</span>
-            <span className="rounded bg-human/10 px-2 py-0.5 text-human">{summary.fail} fail</span>
-            <span className="rounded bg-attention/10 px-2 py-0.5 text-attention">{summary.needs_review} review</span>
-            <span className="text-text-secondary">{summary.rule_count} rules tested</span>
+            <span className="rounded bg-success/10 px-2 py-0.5 text-success">{summary.pass} {t("brain.pass")}</span>
+            <span className="rounded bg-human/10 px-2 py-0.5 text-human">{summary.fail} {t("brain.fail")}</span>
+            <span className="rounded bg-attention/10 px-2 py-0.5 text-attention">{summary.needs_review} {t("brain.review")}</span>
+            <span className="text-text-secondary">{t("brain.rulesTested", { count: summary.rule_count })}</span>
           </div>
           <div className="space-y-1">
             {results.map((r) => (
               <div key={r.candidate_index} className="rounded bg-background p-2 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-text-primary">Candidate #{r.candidate_index + 1}</span>
+                  <span className="text-text-primary">{t("brain.candidateNum", { num: r.candidate_index + 1 })}</span>
                   <span className={`rounded px-2 py-0.5 font-medium ${STATUS_COLORS[r.overall] ?? ""}`}>
                     {r.overall}
                   </span>
                 </div>
                 <div className="mt-1 flex gap-2 text-text-secondary">
-                  <span>{r.pass} pass</span>
-                  <span>{r.fail} fail</span>
-                  <span>{r.needs_review} review</span>
+                  <span>{r.pass} {t("brain.pass")}</span>
+                  <span>{r.fail} {t("brain.fail")}</span>
+                  <span>{r.needs_review} {t("brain.review")}</span>
                 </div>
                 {/* Rule-level detail */}
                 <div className="mt-1 space-y-0.5">
@@ -1003,6 +1012,7 @@ function PublishButton({ packId, versionId, conflicts, onPublished }: {
   conflicts: Conflict[];
   onPublished: () => void;
 }) {
+  const { t } = useI18n();
   const [showForm, setShowForm] = useState(false);
   const [reason, setReason] = useState("");
   const [publishing, setPublishing] = useState(false);
@@ -1023,7 +1033,7 @@ function PublishButton({ packId, versionId, conflicts, onPublished }: {
       setReason("");
       onPublished();
     } catch (err: any) {
-      setError(err?.message ?? "Publish failed");
+      setError(err?.message ?? t("brain.publishFailed"));
     } finally {
       setPublishing(false);
     }
@@ -1037,15 +1047,15 @@ function PublishButton({ packId, versionId, conflicts, onPublished }: {
         className={`rounded-md px-4 py-1.5 text-xs font-semibold text-white ${
           blocked ? "cursor-not-allowed bg-text-secondary/30" : "bg-agent hover:bg-agent/90"
         }`}
-        title={blocked ? "Resolve conflicts before publishing" : "Publish this version"}
+        title={blocked ? t("brain.resolveConflicts") : t("brain.publishVersion")}
       >
-        {blocked ? "Blocked" : "Publish"}
+        {blocked ? t("brain.blocked") : t("brain.publish")}
       </button>
 
       {showForm && (
         <div className="absolute right-0 top-full z-10 mt-2 w-72 rounded-lg border border-border-soft bg-surface p-4 shadow-lg">
-          <h4 className="mb-2 text-xs font-semibold text-text-primary">Publish Rule Pack</h4>
-          <label className="mb-1 block text-xs text-text-secondary">Reason (min 10 characters)</label>
+          <h4 className="mb-2 text-xs font-semibold text-text-primary">{t("brain.publishPack")}</h4>
+          <label className="mb-1 block text-xs text-text-secondary">{t("brain.reasonMin")}</label>
           <textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
@@ -1053,18 +1063,18 @@ function PublishButton({ packId, versionId, conflicts, onPublished }: {
             className="w-full rounded-md border border-border-soft bg-background px-3 py-2 text-sm text-text-primary"
             placeholder="e.g. Updated eligibility criteria per HR directive 2024-03"
           />
-          <p className="mt-1 text-right text-xs text-text-secondary">{reason.length}/10 min</p>
+          <p className="mt-1 text-right text-xs text-text-secondary">{reason.length}/{t("brain.minLabel", { count: 10 })}</p>
           {error && <p className="mt-1 text-xs text-danger">{error}</p>}
           <div className="mt-2 flex justify-end gap-2">
             <button onClick={() => { setShowForm(false); setReason(""); setError(null); }} className="text-xs text-text-secondary hover:text-text-primary">
-              Cancel
+              {t("brain.cancel")}
             </button>
             <button
               onClick={handlePublish}
               disabled={publishing || reason.trim().length < 10}
               className="rounded-md bg-agent px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
             >
-              {publishing ? "Publishing…" : "Confirm Publish"}
+              {publishing ? t("brain.publishing") : t("brain.confirmPublish")}
             </button>
           </div>
         </div>

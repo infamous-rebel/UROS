@@ -15,42 +15,44 @@ import { API_V1, authedRequest } from "../api/client";
 import { DownloadButton } from "./DownloadButton";
 import { getIcon } from "./navigation/iconRegistry";
 import { Icon } from "./navigation/Icon";
+import { useI18n } from "../i18n";
 
 type SettingsTab = "profile" | "organization" | "users" | "credentials" | "fallback" |
   "integrations" | "personas" | "kpi" | "onboarding" | "backup" | "audit" | "export";
 
-const TABS: { key: SettingsTab; label: string; icon: string }[] = [
-  { key: "profile", label: "Profile", icon: "User" },
-  { key: "organization", label: "Organization", icon: "Building2" },
-  { key: "users", label: "Users", icon: "Users" },
-  { key: "credentials", label: "Credentials", icon: "Key" },
-  { key: "fallback", label: "Fallback Chains", icon: "Link" },
-  { key: "integrations", label: "Integrations", icon: "Plug" },
-  { key: "personas", label: "Personas", icon: "VenetianMask" },
-  { key: "kpi", label: "KPI Templates", icon: "BarChart3" },
-  { key: "onboarding", label: "Onboarding", icon: "CircleCheck" },
-  { key: "backup", label: "Backup", icon: "HardDrive" },
-  { key: "audit", label: "Audit & Retention", icon: "ClipboardList" },
-  { key: "export", label: "Data Export", icon: "Package" },
+const TABS: { key: SettingsTab; labelKey: string; icon: string }[] = [
+  { key: "profile", labelKey: "settings.tabProfile", icon: "User" },
+  { key: "organization", labelKey: "settings.tabOrganization", icon: "Building2" },
+  { key: "users", labelKey: "settings.tabUsers", icon: "Users" },
+  { key: "credentials", labelKey: "settings.tabCredentials", icon: "Key" },
+  { key: "fallback", labelKey: "settings.tabFallback", icon: "Link" },
+  { key: "integrations", labelKey: "settings.tabIntegrations", icon: "Plug" },
+  { key: "personas", labelKey: "settings.tabPersonas", icon: "VenetianMask" },
+  { key: "kpi", labelKey: "settings.tabKpi", icon: "BarChart3" },
+  { key: "onboarding", labelKey: "settings.tabOnboarding", icon: "CircleCheck" },
+  { key: "backup", labelKey: "settings.tabBackup", icon: "HardDrive" },
+  { key: "audit", labelKey: "settings.tabAudit", icon: "ClipboardList" },
+  { key: "export", labelKey: "settings.tabExport", icon: "Package" },
 ];
 
 export function Settings() {
   const [tab, setTab] = useState<SettingsTab>("profile");
+  const { t } = useI18n();
 
   return (
     <div className="flex h-full gap-4">
       {/* Sidebar */}
       <nav className="w-48 flex-shrink-0 space-y-0.5 overflow-auto">
-        {TABS.map((t) => (
+        {TABS.map((tabItem) => (
           <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
+            key={tabItem.key}
+            onClick={() => setTab(tabItem.key)}
             className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs font-medium transition-colors ${
-              tab === t.key ? "bg-agent text-white" : "text-text-secondary hover:bg-background hover:text-text-primary"
+              tab === tabItem.key ? "bg-agent text-white" : "text-text-secondary hover:bg-background hover:text-text-primary"
             }`}
           >
-            <Icon icon={getIcon(t.icon)} size={16} tone="neutral" />
-            <span>{t.label}</span>
+            <Icon icon={getIcon(tabItem.icon)} size={16} tone="neutral" />
+            <span>{t(tabItem.labelKey)}</span>
           </button>
         ))}
       </nav>
@@ -93,14 +95,15 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
-function SaveButton({ onClick, saving, label = "Save" }: { onClick: () => void; saving: boolean; label?: string }) {
+function SaveButton({ onClick, saving, label }: { onClick: () => void; saving: boolean; label?: string }) {
+  const { t } = useI18n();
   return (
     <button
       onClick={onClick}
       disabled={saving}
       className="rounded-md bg-agent px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
     >
-      {saving ? "Saving…" : label}
+      {saving ? t("settings.saving") : (label ?? t("settings.save"))}
     </button>
   );
 }
@@ -126,6 +129,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // ─── 1. Profile Tab ──────────────────────────────────────────────────
 
 function ProfileTab() {
+  const { t } = useI18n();
   const [user, setUser] = useState<any>(null);
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -150,12 +154,12 @@ function ProfileTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return <p className="text-sm text-text-secondary">Loading profile…</p>;
-  if (!user) return <EmptyState message="Could not load profile." />;
+  if (loading) return <p className="text-sm text-text-secondary">{t("settings.loadingProfile")}</p>;
+  if (!user) return <EmptyState message={t("settings.profileLoadFailed")} />;
 
   async function handleSave() {
     const errs: { name?: string } = {};
-    if (!name.trim()) errs.name = "This field is required.";
+    if (!name.trim()) errs.name = t("settings.required");
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setErrors({});
     setSaving(true);
@@ -176,42 +180,42 @@ function ProfileTab() {
 
   return (
     <div>
-      <SectionTitle title="Profile" description="Your personal information and active sessions" />
-      <Field label="Full Name">
+      <SectionTitle title={t("settings.profile")} description={t("settings.profileDesc")} />
+      <Field label={t("settings.fullName")}>
         <input value={name} onChange={(e) => { setName(e.target.value); setErrors({}); }} className={errors.name ? inputClassError : inputClass} />
         {errors.name && <FieldError message={errors.name} />}
       </Field>
-      <Field label="Email">
+      <Field label={t("settings.email")}>
         <input value={user.email} disabled className={`${inputClass} opacity-50`} />
       </Field>
-      <Field label="Phone">
+      <Field label={t("settings.phone")}>
         <input value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} placeholder="+880…" />
       </Field>
-      <Field label="Role">
+      <Field label={t("settings.role")}>
         <input value={user.role} disabled className={`${inputClass} opacity-50`} />
       </Field>
       <div className="flex items-center gap-3">
         <SaveButton onClick={handleSave} saving={saving} />
-        {saved && <span className="text-xs text-success"><Icon icon={getIcon("Check")} size={12} tone="system" className="inline mr-1" />Saved</span>}
+        {saved && <span className="text-xs text-success"><Icon icon={getIcon("Check")} size={12} tone="system" className="inline mr-1" />{t("settings.saved")}</span>}
       </div>
 
       {/* Sessions */}
       <div className="mt-6">
-        <h4 className="mb-2 text-xs font-semibold text-text-primary">Active Sessions</h4>
+        <h4 className="mb-2 text-xs font-semibold text-text-primary">{t("settings.activeSessions")}</h4>
         {sessions.length === 0 ? (
-          <EmptyState message="No active sessions." />
+          <EmptyState message={t("settings.noSessions")} />
         ) : (
           <div className="space-y-1">
             {sessions.map((s: any) => (
               <div key={s.session_id} className="flex items-center justify-between rounded bg-background p-2 text-xs">
                 <div>
                   <span className={s.current ? "font-semibold text-agent" : "text-text-primary"}>
-                    {s.current ? "Current session" : s.session_id.slice(0, 12) + "…"}
+                    {s.current ? t("settings.currentSession") : s.session_id.slice(0, 12) + "…"}
                   </span>
                   <span className="ml-2 text-text-secondary">{s.ip} · {new Date(s.created_at).toLocaleDateString()}</span>
                 </div>
                 {!s.current && (
-                  <button onClick={() => handleRevoke(s.session_id)} className="text-human hover:underline">Revoke</button>
+                  <button onClick={() => handleRevoke(s.session_id)} className="text-human hover:underline">{t("settings.revoke")}</button>
                 )}
               </div>
             ))}
@@ -225,6 +229,7 @@ function ProfileTab() {
 // ─── 2. Organization Tab ─────────────────────────────────────────────
 
 function OrganizationTab() {
+  const { t } = useI18n();
   const [org, setOrg] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
@@ -243,8 +248,8 @@ function OrganizationTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return <p className="text-sm text-text-secondary">Loading…</p>;
-  if (!org) return <EmptyState message="Could not load organization." />;
+  if (loading) return <p className="text-sm text-text-secondary">{t("settings.loading")}</p>;
+  if (!org) return <EmptyState message={t("settings.orgLoadFailed")} />;
 
   async function handleSave() {
     setSaving(true);
@@ -260,13 +265,13 @@ function OrganizationTab() {
 
   return (
     <div>
-      <SectionTitle title="Organization" description="Organization profile and configuration (ADMIN only)" />
-      <Field label="Organization Name">
+      <SectionTitle title={t("settings.organization")} description={t("settings.orgDesc")} />
+      <Field label={t("settings.orgName")}>
         <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
       </Field>
-      <Field label="Sector">
+      <Field label={t("settings.sector")}>
         <select value={sector} onChange={(e) => setSector(e.target.value)} className={inputClass}>
-          <option value="GOVT_NONCADRE">Govt (Non-Cadre)</option>
+          <option value="GOVT_NONCADRE">{t("brain.sectorGovtNon")}</option>
           <option value="BCS">BCS</option>
           <option value="STATE_BANK">State Bank</option>
           <option value="PRIVATE_BANK">Private Bank</option>
@@ -275,15 +280,15 @@ function OrganizationTab() {
           <option value="SME">SME</option>
         </select>
       </Field>
-      <Field label="Deployment Mode">
+      <Field label={t("settings.deploymentMode")}>
         <input value={org.deployment_mode ?? "CLOUD"} disabled className={`${inputClass} opacity-50`} />
       </Field>
-      <Field label="Default Language">
+      <Field label={t("settings.defaultLanguage")}>
         <input value={org.default_language ?? "en"} disabled className={`${inputClass} opacity-50`} />
       </Field>
       <div className="flex items-center gap-3">
         <SaveButton onClick={handleSave} saving={saving} />
-        {saved && <span className="text-xs text-success"><Icon icon={getIcon("Check")} size={12} tone="system" className="inline mr-1" />Saved</span>}
+        {saved && <span className="text-xs text-success"><Icon icon={getIcon("Check")} size={12} tone="system" className="inline mr-1" />{t("settings.saved")}</span>}
       </div>
     </div>
   );
@@ -292,6 +297,7 @@ function OrganizationTab() {
 // ─── 3. Users Tab ────────────────────────────────────────────────────
 
 function UsersTab() {
+  const { t } = useI18n();
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
@@ -309,13 +315,13 @@ function UsersTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return <p className="text-sm text-text-secondary">Loading users…</p>;
+  if (loading) return <p className="text-sm text-text-secondary">{t("settings.loadingUsers")}</p>;
 
   async function handleInvite() {
     const errs: { email?: string; name?: string } = {};
-    if (!inviteEmail.trim()) errs.email = "This field is required.";
-    else if (!EMAIL_RE.test(inviteEmail)) errs.email = "Must be a valid email address.";
-    if (!inviteName.trim()) errs.name = "This field is required.";
+    if (!inviteEmail.trim()) errs.email = t("settings.required");
+    else if (!EMAIL_RE.test(inviteEmail)) errs.email = t("settings.validEmail");
+    if (!inviteName.trim()) errs.name = t("settings.required");
     if (Object.keys(errs).length > 0) { setInviteErrors(errs); return; }
     setInviteErrors({});
     try {
@@ -338,34 +344,34 @@ function UsersTab() {
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <SectionTitle title="Users" description="Manage staff accounts (ADMIN only)" />
+        <SectionTitle title={t("settings.users")} description={t("settings.usersDesc")} />
         <button onClick={() => setShowInvite(!showInvite)} className="rounded-md bg-agent px-3 py-1.5 text-xs font-semibold text-white">
-          {showInvite ? "Cancel" : "+ Invite User"}
+          {showInvite ? t("settings.cancel") : t("settings.inviteUser")}
         </button>
       </div>
 
       {showInvite && (
         <div className="mb-4 rounded-lg border border-agent/30 bg-background p-3">
-          <Field label="Email"><input value={inviteEmail} onChange={(e) => { setInviteEmail(e.target.value); setInviteErrors({}); }} className={inviteErrors.email ? inputClassError : inputClass} type="email" />{inviteErrors.email && <FieldError message={inviteErrors.email} />}</Field>
-          <Field label="Full Name"><input value={inviteName} onChange={(e) => { setInviteName(e.target.value); setInviteErrors({}); }} className={inviteErrors.name ? inputClassError : inputClass} />{inviteErrors.name && <FieldError message={inviteErrors.name} />}</Field>
-          <Field label="Role">
+          <Field label={t("settings.email")}><input value={inviteEmail} onChange={(e) => { setInviteEmail(e.target.value); setInviteErrors({}); }} className={inviteErrors.email ? inputClassError : inputClass} type="email" />{inviteErrors.email && <FieldError message={inviteErrors.email} />}</Field>
+          <Field label={t("settings.fullName")}><input value={inviteName} onChange={(e) => { setInviteName(e.target.value); setInviteErrors({}); }} className={inviteErrors.name ? inputClassError : inputClass} />{inviteErrors.name && <FieldError message={inviteErrors.name} />}</Field>
+          <Field label={t("settings.role")}>
             <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)} className={inputClass}>
-              <option value="ADMIN">Admin</option>
-              <option value="SENIOR_RECRUITER">Senior Recruiter</option>
-              <option value="RECRUITER">Recruiter</option>
-              <option value="AUDITOR">Auditor</option>
-              <option value="DEPT_HEAD">Department Head</option>
+              <option value="ADMIN">{t("settings.roleAdmin")}</option>
+              <option value="SENIOR_RECRUITER">{t("settings.roleSenior")}</option>
+              <option value="RECRUITER">{t("settings.roleRecruiter")}</option>
+              <option value="AUDITOR">{t("settings.roleAuditor")}</option>
+              <option value="DEPT_HEAD">{t("settings.roleDeptHead")}</option>
             </select>
           </Field>
-          <SaveButton onClick={handleInvite} saving={false} label="Send Invite" />
+          <SaveButton onClick={handleInvite} saving={false} label={t("settings.sendInvite")} />
         </div>
       )}
 
-      {users.length === 0 ? <EmptyState message="No users found." /> : (
+      {users.length === 0 ? <EmptyState message={t("settings.noUsers")} /> : (
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-border-soft text-xs uppercase text-text-secondary">
-              <th className="pb-2">Name</th><th className="pb-2">Email</th><th className="pb-2">Role</th><th className="pb-2">Last Login</th><th className="pb-2 text-right">Actions</th>
+              <th className="pb-2">{t("settings.nameCol")}</th><th className="pb-2">{t("settings.emailCol")}</th><th className="pb-2">{t("settings.roleCol")}</th><th className="pb-2">{t("settings.lastLogin")}</th><th className="pb-2 text-right">{t("settings.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -374,9 +380,9 @@ function UsersTab() {
                 <td className="py-2 text-text-primary">{u.full_name}</td>
                 <td className="py-2 text-text-secondary">{u.email}</td>
                 <td className="py-2"><span className="rounded bg-agent/10 px-1.5 py-0.5 text-xs text-agent">{u.role}</span></td>
-                <td className="py-2 text-xs text-text-secondary">{u.last_login_at ? new Date(u.last_login_at).toLocaleString() : "Never"}</td>
+                <td className="py-2 text-xs text-text-secondary">{u.last_login_at ? new Date(u.last_login_at).toLocaleString() : t("settings.never")}</td>
                 <td className="py-2 text-right">
-                  <button onClick={() => handleDeactivate(u.user_id)} className="text-xs text-human hover:underline">Deactivate</button>
+                  <button onClick={() => handleDeactivate(u.user_id)} className="text-xs text-human hover:underline">{t("settings.deactivate")}</button>
                 </td>
               </tr>
             ))}
@@ -390,6 +396,7 @@ function UsersTab() {
 // ─── 4. Credentials Tab ──────────────────────────────────────────────
 
 function CredentialsTab() {
+  const { t } = useI18n();
   const [creds, setCreds] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -402,16 +409,16 @@ function CredentialsTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return <p className="text-sm text-text-secondary">Loading credentials…</p>;
+  if (loading) return <p className="text-sm text-text-secondary">{t("settings.loadingCreds")}</p>;
 
   return (
     <div>
-      <SectionTitle title="BYOK Credentials" description="Encrypted API keys for integrations (ADMIN only)" />
-      {creds.length === 0 ? <EmptyState message="No credentials configured. Add connector keys to enable integrations." /> : (
+      <SectionTitle title={t("settings.byok")} description={t("settings.byokDesc")} />
+      {creds.length === 0 ? <EmptyState message={t("settings.noCreds")} /> : (
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-border-soft text-xs uppercase text-text-secondary">
-              <th className="pb-2">Connector</th><th className="pb-2">Label</th><th className="pb-2">Key Hint</th><th className="pb-2">Status</th><th className="pb-2">Created</th>
+              <th className="pb-2">{t("settings.connector")}</th><th className="pb-2">{t("settings.label")}</th><th className="pb-2">{t("settings.keyHint")}</th><th className="pb-2">{t("settings.status")}</th><th className="pb-2">{t("settings.created")}</th>
             </tr>
           </thead>
           <tbody>
@@ -420,7 +427,7 @@ function CredentialsTab() {
                 <td className="py-2 font-mono text-xs text-text-primary">{c.connector}</td>
                 <td className="py-2 text-text-secondary">{c.label}</td>
                 <td className="py-2 font-mono text-xs text-text-secondary">{c.key_hint ?? "••••"}</td>
-                <td className="py-2"><span className={`rounded px-1.5 py-0.5 text-xs ${c.active !== false ? "bg-success/10 text-success" : "bg-human/10 text-human"}`}>{c.active !== false ? "Active" : "Revoked"}</span></td>
+                <td className="py-2"><span className={`rounded px-1.5 py-0.5 text-xs ${c.active !== false ? "bg-success/10 text-success" : "bg-human/10 text-human"}`}>{c.active !== false ? t("settings.credActive") : t("settings.credRevoked")}</span></td>
                 <td className="py-2 text-xs text-text-secondary">{new Date(c.created_at).toLocaleDateString()}</td>
               </tr>
             ))}
@@ -434,6 +441,7 @@ function CredentialsTab() {
 // ─── 5. Fallback Tab ─────────────────────────────────────────────────
 
 function FallbackTab() {
+  const { t } = useI18n();
   const [chains, setChains] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
@@ -458,7 +466,7 @@ function FallbackTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return <p className="text-sm text-text-secondary">Loading fallback chains…</p>;
+  if (loading) return <p className="text-sm text-text-secondary">{t("settings.loadingFallback")}</p>;
 
   function startEdit(type: string) {
     setEditing(type);
@@ -482,27 +490,27 @@ function FallbackTab() {
 
   return (
     <div>
-      <SectionTitle title="Fallback Chains" description="Ordered provider lists for each message type (ADMIN only). Comma-separated provider names." />
-      {saved && <p className="mb-2 text-xs text-success"><Icon icon={getIcon("Check")} size={12} tone="system" className="inline mr-1" />Chain saved</p>}
+      <SectionTitle title={t("settings.fallback")} description={t("settings.fallbackDesc")} />
+      {saved && <p className="mb-2 text-xs text-success"><Icon icon={getIcon("Check")} size={12} tone="system" className="inline mr-1" />{t("settings.chainSaved")}</p>}
       {(["SMS", "EMAIL", "WHATSAPP"] as const).map((type) => (
         <div key={type} className="mb-4 rounded-lg border border-border-soft bg-background p-3">
           <div className="mb-2 flex items-center justify-between">
-            <h4 className="text-xs font-semibold text-text-primary">{type} Chain</h4>
+            <h4 className="text-xs font-semibold text-text-primary">{t("settings.chain", { type })}</h4>
             {editing !== type && (
-              <button onClick={() => startEdit(type)} className="text-xs text-agent hover:underline">Edit</button>
+              <button onClick={() => startEdit(type)} className="text-xs text-agent hover:underline">{t("settings.edit")}</button>
             )}
           </div>
           {editing === type ? (
             <div>
               <input value={editValue} onChange={(e) => setEditValue(e.target.value)} className={inputClass} placeholder="provider1, provider2, …" />
               <div className="mt-2 flex gap-2">
-                <SaveButton onClick={() => handleSave(type)} saving={saving} label="Save Chain" />
-                <button onClick={() => setEditing(null)} className="text-xs text-text-secondary hover:text-text-primary">Cancel</button>
+                <SaveButton onClick={() => handleSave(type)} saving={saving} label={t("settings.saveChain")} />
+                <button onClick={() => setEditing(null)} className="text-xs text-text-secondary hover:text-text-primary">{t("settings.cancelEdit")}</button>
               </div>
             </div>
           ) : (
             chains[type]?.length === 0 || !chains[type] ? (
-              <p className="text-xs text-text-secondary">No providers configured. Add credentials first.</p>
+              <p className="text-xs text-text-secondary">{t("settings.noProviders")}</p>
             ) : (
               <div className="flex items-center gap-2">
                 {chains[type].map((p, i) => (
@@ -523,6 +531,7 @@ function FallbackTab() {
 // ─── 6. Integrations Tab ─────────────────────────────────────────────
 
 function IntegrationsTab() {
+  const { t } = useI18n();
   const [providers, setProviders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -535,7 +544,7 @@ function IntegrationsTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return <p className="text-sm text-text-secondary">Loading integrations…</p>;
+  if (loading) return <p className="text-sm text-text-secondary">{t("settings.loadingIntegrations")}</p>;
 
   // Group by category
   const grouped = providers.reduce((acc: Record<string, any[]>, p: any) => {
@@ -545,7 +554,7 @@ function IntegrationsTab() {
 
   return (
     <div>
-      <SectionTitle title="Integrations" description="Provider registry and adapter status" />
+      <SectionTitle title={t("settings.integrations")} description={t("settings.integrationsDesc")} />
       {Object.entries(grouped).map(([cat, provs]) => (
         <div key={cat} className="mb-4">
           <h4 className="mb-2 text-xs font-semibold uppercase text-text-secondary">{cat}</h4>
@@ -554,7 +563,7 @@ function IntegrationsTab() {
               <div key={i} className="flex items-center justify-between rounded border border-border-soft bg-background p-2 text-xs">
                 <span className="text-text-primary">{p.provider}</span>
                 <span className={`rounded px-1.5 py-0.5 ${p.registered ? "bg-success/10 text-success" : "bg-text-secondary/10 text-text-secondary"}`}>
-                  {p.registered ? "Ready" : "Not configured"}
+                  {p.registered ? t("settings.ready") : t("settings.notConfigured")}
                 </span>
               </div>
             ))}
@@ -568,6 +577,7 @@ function IntegrationsTab() {
 // ─── 7. Personas Tab ─────────────────────────────────────────────────
 
 function PersonasTab() {
+  const { t } = useI18n();
   const [personas, setPersonas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -580,17 +590,17 @@ function PersonasTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return <p className="text-sm text-text-secondary">Loading personas…</p>;
+  if (loading) return <p className="text-sm text-text-secondary">{t("settings.loadingPersonas")}</p>;
 
   return (
     <div>
-      <SectionTitle title="Departmental Personas" description="Define department requirements for 7-dimension matching" />
-      {personas.length === 0 ? <EmptyState message="No personas defined. Create personas to configure department-specific requirements." /> : (
+      <SectionTitle title={t("settings.personas")} description={t("settings.personasDesc")} />
+      {personas.length === 0 ? <EmptyState message={t("settings.noPersonas")} /> : (
         <div className="space-y-2">
           {personas.map((p: any) => (
             <div key={p.persona_id} className="rounded-lg border border-border-soft bg-background p-3">
               <h4 className="text-sm font-medium text-text-primary">{p.name}</h4>
-              <p className="text-xs text-text-secondary">{p.department ?? "General"}</p>
+              <p className="text-xs text-text-secondary">{p.department ?? t("settings.general")}</p>
             </div>
           ))}
         </div>
@@ -602,6 +612,7 @@ function PersonasTab() {
 // ─── 8. KPI Tab ──────────────────────────────────────────────────────
 
 function KpiTab() {
+  const { t } = useI18n();
   const [kpis, setKpis] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -614,17 +625,17 @@ function KpiTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return <p className="text-sm text-text-secondary">Loading KPI definitions…</p>;
+  if (loading) return <p className="text-sm text-text-secondary">{t("settings.loadingKpis")}</p>;
 
   return (
     <div>
-      <SectionTitle title="KPI Templates" description="Key performance indicators per role" />
-      {kpis.length === 0 ? <EmptyState message="No KPI definitions configured." /> : (
+      <SectionTitle title={t("settings.kpi")} description={t("settings.kpiDesc")} />
+      {kpis.length === 0 ? <EmptyState message={t("settings.noKpis")} /> : (
         <div className="space-y-2">
           {kpis.map((k: any) => (
             <div key={k.kpi_definition_id ?? k.id} className="rounded border border-border-soft bg-background p-2 text-xs">
               <span className="font-medium text-text-primary">{k.name ?? k.kpi_name}</span>
-              <span className="ml-2 text-text-secondary">Role: {k.role} · Weight: {k.weight ?? 1}</span>
+              <span className="ml-2 text-text-secondary">{t("settings.roleLabel")}: {k.role} · {t("settings.weightLabel")}: {k.weight ?? 1}</span>
             </div>
           ))}
         </div>
@@ -636,6 +647,7 @@ function KpiTab() {
 // ─── 9. Onboarding Tab ───────────────────────────────────────────────
 
 function OnboardingTab() {
+  const { t } = useI18n();
   const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -648,17 +660,17 @@ function OnboardingTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return <p className="text-sm text-text-secondary">Loading templates…</p>;
+  if (loading) return <p className="text-sm text-text-secondary">{t("settings.loadingTemplates")}</p>;
 
   return (
     <div>
-      <SectionTitle title="Onboarding Templates" description="Checklist templates per role" />
-      {templates.length === 0 ? <EmptyState message="No onboarding templates. Create templates to standardize the onboarding process." /> : (
+      <SectionTitle title={t("settings.onboarding")} description={t("settings.onboardingDesc")} />
+      {templates.length === 0 ? <EmptyState message={t("settings.noTemplates")} /> : (
         <div className="space-y-2">
-          {templates.map((t: any) => (
-            <div key={t.template_id} className="rounded border border-border-soft bg-background p-2 text-xs">
-              <span className="font-medium text-text-primary">{t.role}</span>
-              <span className="ml-2 text-text-secondary">{t.steps?.length ?? 0} steps</span>
+          {templates.map((tmpl: any) => (
+            <div key={tmpl.template_id} className="rounded border border-border-soft bg-background p-2 text-xs">
+              <span className="font-medium text-text-primary">{tmpl.role}</span>
+              <span className="ml-2 text-text-secondary">{t("settings.steps", { count: tmpl.steps?.length ?? 0 })}</span>
             </div>
           ))}
         </div>
@@ -670,6 +682,7 @@ function OnboardingTab() {
 // ─── 10. Backup Tab ──────────────────────────────────────────────────
 
 function BackupTab() {
+  const { t } = useI18n();
   const [backups, setBackups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
@@ -683,7 +696,7 @@ function BackupTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return <p className="text-sm text-text-secondary">Loading backups…</p>;
+  if (loading) return <p className="text-sm text-text-secondary">{t("settings.loadingBackups")}</p>;
 
   async function handleTrigger() {
     setTriggering(true);
@@ -696,16 +709,16 @@ function BackupTab() {
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <SectionTitle title="Backup" description="Trigger and download backup archives (ADMIN only)" />
+        <SectionTitle title={t("settings.backup")} description={t("settings.backupDesc")} />
         <button onClick={handleTrigger} disabled={triggering} className="rounded-md bg-agent px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">
-          {triggering ? "Creating…" : "Trigger Backup"}
+          {triggering ? t("settings.creating") : t("settings.triggerBackup")}
         </button>
       </div>
-      {backups.length === 0 ? <EmptyState message="No backups yet. Trigger a backup to create an archive." /> : (
+      {backups.length === 0 ? <EmptyState message={t("settings.noBackups")} /> : (
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-border-soft text-xs uppercase text-text-secondary">
-              <th className="pb-2">Filename</th><th className="pb-2">Size</th><th className="pb-2">Created</th><th className="pb-2 text-right">Actions</th>
+              <th className="pb-2">{t("settings.filename")}</th><th className="pb-2">{t("settings.size")}</th><th className="pb-2">{t("settings.created")}</th><th className="pb-2 text-right">{t("settings.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -715,7 +728,7 @@ function BackupTab() {
                 <td className="py-2 text-xs text-text-secondary">{(b.size / 1024).toFixed(1)} KB</td>
                 <td className="py-2 text-xs text-text-secondary">{new Date(b.created_at).toLocaleString()}</td>
                 <td className="py-2 text-right">
-                  <DownloadButton endpoint={`${API_V1}/settings/backup/download/${b.filename}`} format="tar" filename={b.filename} label="Download" size="sm" />
+                  <DownloadButton endpoint={`${API_V1}/settings/backup/download/${b.filename}`} format="tar" filename={b.filename} label={t("settings.download")} size="sm" />
                 </td>
               </tr>
             ))}
@@ -729,6 +742,7 @@ function BackupTab() {
 // ─── 11. Audit Tab ───────────────────────────────────────────────────
 
 function AuditTab() {
+  const { t } = useI18n();
   const [retention, setRetention] = useState<any>(null);
   const [days, setDays] = useState(90);
   const [loading, setLoading] = useState(true);
@@ -745,7 +759,7 @@ function AuditTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return <p className="text-sm text-text-secondary">Loading…</p>;
+  if (loading) return <p className="text-sm text-text-secondary">{t("settings.loading")}</p>;
 
   async function handleSave() {
     setSaving(true);
@@ -761,27 +775,27 @@ function AuditTab() {
 
   return (
     <div>
-      <SectionTitle title="Audit & Retention" description="Configure audit log retention and export trails" />
+      <SectionTitle title={t("settings.auditRetention")} description={t("settings.auditDesc")} />
 
       <div className="mb-4 flex gap-2">
         <DownloadButton endpoint={`${API_V1}/audit-logs/export?format=csv`} format="csv" filename="audit-log.csv" label="Export CSV" size="sm" />
         <DownloadButton endpoint={`${API_V1}/audit-logs/export?format=json`} format="json" filename="audit-log.json" label="Export JSON" size="sm" />
       </div>
-      <Field label="Retention (days)">
+      <Field label={t("settings.retentionDays")}>
         <input type="number" value={days} onChange={(e) => setDays(Number(e.target.value))} className={inputClass} min={7} max={3650} />
       </Field>
-      <Field label="Archive After (days)">
+      <Field label={t("settings.archiveAfter")}>
         <input value={retention?.archive_after_days ?? 30} disabled className={`${inputClass} opacity-50`} />
       </Field>
       <div className="flex items-center gap-3">
         <SaveButton onClick={handleSave} saving={saving} />
-        {saved && <span className="text-xs text-success"><Icon icon={getIcon("Check")} size={12} tone="system" className="inline mr-1" />Retention updated</span>}
+        {saved && <span className="text-xs text-success"><Icon icon={getIcon("Check")} size={12} tone="system" className="inline mr-1" />{t("settings.retentionUpdated")}</span>}
       </div>
 
       <div className="mt-6">
-        <h4 className="mb-2 text-xs font-semibold text-text-primary">Filter Preview</h4>
+        <h4 className="mb-2 text-xs font-semibold text-text-primary">{t("settings.filterPreview")}</h4>
         <div className="flex gap-2">
-          {["Last 24h", "Last 7 days", "Last 30 days", "All"].map((label) => (
+          {[t("settings.last24h"), t("settings.last7d"), t("settings.last30d"), t("settings.all")].map((label) => (
             <button key={label} className="rounded border border-border-soft px-3 py-1.5 text-xs text-text-secondary hover:bg-background">
               {label}
             </button>
@@ -795,6 +809,7 @@ function AuditTab() {
 // ─── 12. Data Export Tab ─────────────────────────────────────────────
 
 function ExportTab() {
+  const { t } = useI18n();
   const [exportJob, setExportJob] = useState<any>(null);
   const [requesting, setRequesting] = useState(false);
 
@@ -815,20 +830,20 @@ function ExportTab() {
 
   return (
     <div>
-      <SectionTitle title="Data Export" description="Request a full organizational data export (ADMIN only, rate-limited)" />
+      <SectionTitle title={t("settings.dataExport")} description={t("settings.exportDesc")} />
       {!exportJob ? (
         <div>
-          <p className="mb-3 text-xs text-text-secondary">This will export all candidates, rules, evaluations, audit logs, and documents as a ZIP archive.</p>
+          <p className="mb-3 text-xs text-text-secondary">{t("settings.exportHint")}</p>
           <button onClick={handleRequest} disabled={requesting} className="rounded-md bg-agent px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-50">
-            {requesting ? "Requesting…" : "Request Export"}
+            {requesting ? t("settings.requesting") : t("settings.requestExport")}
           </button>
         </div>
       ) : (
         <div className="rounded-lg border border-border-soft bg-background p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-text-primary">Export #{exportJob.id}</p>
-              <p className="text-xs text-text-secondary">Requested {new Date(exportJob.requested_at).toLocaleString()}</p>
+              <p className="text-sm font-medium text-text-primary">{t("settings.exportNum", { id: exportJob.id })}</p>
+              <p className="text-xs text-text-secondary">{t("settings.requested")} {new Date(exportJob.requested_at).toLocaleString()}</p>
             </div>
             <span className={`rounded px-2 py-1 text-xs font-medium ${
               exportJob.status === "READY" ? "bg-success/10 text-success" : "bg-attention/10 text-attention"
@@ -837,7 +852,7 @@ function ExportTab() {
             </span>
           </div>
           {exportJob.status === "READY" && (
-            <DownloadButton endpoint={`${API_V1}/settings/data-export/download/${exportJob.id}`} format="json" filename="data-export.json" label="Download Export" size="sm" variant="primary" />
+            <DownloadButton endpoint={`${API_V1}/settings/data-export/download/${exportJob.id}`} format="json" filename="data-export.json" label={t("settings.downloadExport")} size="sm" variant="primary" />
           )}
         </div>
       )}

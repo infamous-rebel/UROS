@@ -6,6 +6,7 @@ import {
   DimensionBreakdownEntry,
 } from "../hooks/hooks_dimensions";
 import { getToken } from "../api/client";
+import { useI18n } from "../i18n";
 import { EmptyState } from "./EmptyState";
 import { getIcon } from "./navigation/iconRegistry";
 import { Icon } from "./navigation/Icon";
@@ -38,6 +39,7 @@ function ScoreBar({ label, value, tone = "agent" }: { label: string; value: numb
 }
 
 function DimensionRow({ dim }: { dim: DimensionBreakdownEntry }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   return (
     <div className="rounded-md border border-border-soft bg-surface">
@@ -57,7 +59,7 @@ function DimensionRow({ dim }: { dim: DimensionBreakdownEntry }) {
               dim.knockout_failed ? "bg-danger text-white" : "bg-border-soft text-text-secondary"
             }`}
           >
-            knockout
+            {t("dimension.knockoutLabel")}
           </span>
         )}
         <span className="flex-shrink-0 text-xs text-text-secondary"><Icon icon={getIcon(open ? "ChevronUp" : "ChevronDown")} size={14} tone="neutral" /></span>
@@ -68,11 +70,11 @@ function DimensionRow({ dim }: { dim: DimensionBreakdownEntry }) {
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="text-text-secondary">
-                <th className="py-1 pr-2">Sub-criterion</th>
-                <th className="py-1 pr-2">Rule</th>
-                <th className="py-1 pr-2">Extracted</th>
-                <th className="py-1 pr-2">Result</th>
-                <th className="py-1">Points</th>
+                <th className="py-1 pr-2">{t("dimension.subcriterion")}</th>
+                <th className="py-1 pr-2">{t("dimension.rule")}</th>
+                <th className="py-1 pr-2">{t("dimension.extracted")}</th>
+                <th className="py-1 pr-2">{t("dimension.result")}</th>
+                <th className="py-1">{t("dimension.points")}</th>
               </tr>
             </thead>
             <tbody>
@@ -91,7 +93,7 @@ function DimensionRow({ dim }: { dim: DimensionBreakdownEntry }) {
                     {s.flagged ? (
                       <span className="text-attention">{s.flag_reason}</span>
                     ) : s.matched ? (
-                      <span className="text-success">MATCH</span>
+                      <span className="text-success">{t("dimension.match")}</span>
                     ) : (
                       <ReasonCode code={s.reason_code} size="sm" />
                     )}
@@ -108,6 +110,7 @@ function DimensionRow({ dim }: { dim: DimensionBreakdownEntry }) {
 }
 
 export function DimensionScorecard() {
+  const { t } = useI18n();
   const [candidateId, setCandidateId] = useState("");
   const [activeCandidateId, setActiveCandidateId] = useState<string | null>(null);
   const [overrideReason, setOverrideReason] = useState("");
@@ -119,7 +122,7 @@ export function DimensionScorecard() {
 
   const latest = useMemo(() => data?.dimension_scores?.[0] ?? null, [data]);
 
-  if (!getToken()) return <EmptyState message="Connect with a dev token to view dimension scores." />;
+  if (!getToken()) return <EmptyState message={t("dimension.tokenRequired")} />;
 
   return (
     <div className="flex flex-col gap-4">
@@ -127,29 +130,29 @@ export function DimensionScorecard() {
         <input
           value={candidateId}
           onChange={(e) => setCandidateId(e.target.value)}
-          placeholder="Candidate ID (e.g. UROS-2026-034512)"
+          placeholder={t("dimension.candidatePlaceholder")}
           className="flex-1 rounded-md border border-border-soft bg-surface px-3 py-1.5 text-sm text-text-primary"
         />
         <button
           onClick={() => setActiveCandidateId(candidateId.trim() || null)}
           className="rounded-md bg-agent px-3 py-1.5 text-xs font-medium text-white"
         >
-          Load
+          {t("dimension.load")}
         </button>
         <button
           disabled={!activeCandidateId || run.isPending}
           onClick={() => run.mutate({})}
           className="rounded-md bg-human px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
         >
-          {run.isPending ? "Scoring…" : "Run 7-Dimension Scoring"}
+          {run.isPending ? t("dimension.scoring") : t("dimension.runScoring")}
         </button>
       </div>
 
-      {!activeCandidateId && <EmptyState message="Enter a candidate ID and Load to see their Dimension Scorecard." />}
-      {activeCandidateId && isLoading && <EmptyState message="Loading dimension scores…" />}
-      {activeCandidateId && isError && <EmptyState message="Could not reach the dimensions API." tone="danger" />}
+      {!activeCandidateId && <EmptyState message={t("dimension.emptyPrompt")} />}
+      {activeCandidateId && isLoading && <EmptyState message={t("dimension.loading")} />}
+      {activeCandidateId && isError && <EmptyState message={t("dimension.apiError")} tone="danger" />}
       {activeCandidateId && !isLoading && !isError && !latest && (
-        <EmptyState message="No dimension scoring run yet for this candidate. Click “Run 7-Dimension Scoring”." />
+        <EmptyState message={t("dimension.noScore")} />
       )}
 
       {latest && (
@@ -157,7 +160,7 @@ export function DimensionScorecard() {
           {/* Overall fit score — the headline number, always visible, never a lone chart */}
           <div className="flex items-center justify-between rounded-lg border border-border-soft bg-surface p-4">
             <div>
-              <div className="text-[11px] uppercase tracking-wide text-text-secondary">Overall Fit Score</div>
+              <div className="text-[11px] uppercase tracking-wide text-text-secondary">{t("dimension.overallFit")}</div>
               <div className="text-3xl font-semibold text-agent">{latest.overall_fit_score}</div>
             </div>
             <div className="text-right">
@@ -183,10 +186,10 @@ export function DimensionScorecard() {
 
           {/* Human-in-the-loop decision — the agent only ever suggests */}
           <div className="rounded-lg border border-border-soft bg-surface p-3">
-            <div className="mb-2 text-xs font-medium text-text-secondary">Human Decision</div>
+            <div className="mb-2 text-xs font-medium text-text-secondary">{t("dimension.humanDecision")}</div>
             {latest.status !== "CALCULATED" ? (
               <div className="text-xs text-text-secondary">
-                Already resolved as <span className={STATUS_COLOR[latest.status]}>{latest.status}</span>
+                {t("dimension.alreadyResolved")} <span className={STATUS_COLOR[latest.status]}>{latest.status}</span>
                 {latest.human_reviewer ? ` by ${latest.human_reviewer}` : ""}
                 {latest.override_reason ? ` — “${latest.override_reason}”` : ""}
               </div>
@@ -199,7 +202,7 @@ export function DimensionScorecard() {
                     }
                     className="rounded bg-human px-3 py-1.5 text-xs font-medium text-white"
                   >
-                    Approve
+                    {t("dimension.approve")}
                   </button>
                   <button
                     onClick={() =>
@@ -207,13 +210,13 @@ export function DimensionScorecard() {
                     }
                     className="rounded border border-danger px-3 py-1.5 text-xs font-medium text-danger"
                   >
-                    Reject
+                    {t("dimension.reject")}
                   </button>
                   <button
                     onClick={() => setShowOverrideFor(latest.evaluation_id)}
                     className="rounded border border-attention px-3 py-1.5 text-xs font-medium text-attention"
                   >
-                    Override
+                    {t("dimension.override")}
                   </button>
                 </div>
                 {showOverrideFor === latest.evaluation_id && (
@@ -221,7 +224,7 @@ export function DimensionScorecard() {
                     <textarea
                       value={overrideReason}
                       onChange={(e) => setOverrideReason(e.target.value)}
-                      placeholder="Mandatory reason for override…"
+                      placeholder={t("dimension.overrideReason")}
                       className="rounded-md border border-border-soft bg-background px-2 py-1.5 text-xs text-text-primary"
                       rows={2}
                     />
@@ -239,7 +242,7 @@ export function DimensionScorecard() {
                         }}
                         className="rounded bg-attention px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
                       >
-                        Confirm Override
+                        {t("dimension.confirmOverride")}
                       </button>
                       <button
                         onClick={() => {
@@ -248,7 +251,7 @@ export function DimensionScorecard() {
                         }}
                         className="rounded px-3 py-1.5 text-xs text-text-secondary"
                       >
-                        Cancel
+                        {t("dimension.cancel")}
                       </button>
                     </div>
                   </div>

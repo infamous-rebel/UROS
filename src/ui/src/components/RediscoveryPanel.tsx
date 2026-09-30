@@ -13,6 +13,7 @@ import {
   RediscoveryOutreachChannel,
 } from "../hooks/hooks_rediscovery";
 import { getToken } from "../api/client";
+import { useI18n } from "../i18n";
 import { EmptyState } from "./EmptyState";
 import { ReasonCode } from "./ReasonCode";
 
@@ -41,6 +42,7 @@ function StatusBadge({ status }: { status: RediscoverySuggestionStatus }) {
 // ---------------------------------------------------------------------
 
 function ConsentLookup() {
+  const { t } = useI18n();
   const [candidateIdInput, setCandidateIdInput] = useState("");
   const [lookedUp, setLookedUp] = useState<string | null>(null);
   const { data, isLoading, isError } = useRediscoveryConsent(lookedUp);
@@ -48,33 +50,33 @@ function ConsentLookup() {
 
   return (
     <div className="rounded-lg border border-border-soft bg-surface p-3">
-      <div className="mb-2 text-xs font-semibold text-text-primary">Candidate Consent</div>
+      <div className="mb-2 text-xs font-semibold text-text-primary">{t("rediscovery.candidateConsent")}</div>
       <div className="flex flex-col gap-2 sm:flex-row">
         <input
           value={candidateIdInput}
           onChange={(e) => setCandidateIdInput(e.target.value)}
-          placeholder="Candidate ID"
+          placeholder={t("rediscovery.candidateId")}
           className="flex-1 rounded-md border border-border-soft bg-background px-2 py-1.5 text-xs text-text-primary"
         />
         <button
           onClick={() => setLookedUp(candidateIdInput.trim() || null)}
           className="rounded-md bg-human px-3 py-1.5 text-xs font-medium text-white"
         >
-          Check Status
+          {t("rediscovery.checkStatus")}
         </button>
       </div>
 
       {lookedUp && (
         <div className="mt-3 border-t border-border-soft pt-2">
-          {isLoading && <EmptyState message="Loading consent status…" />}
-          {isError && <EmptyState message="Could not reach the rediscovery API." tone="danger" />}
+          {isLoading && <EmptyState message={t("rediscovery.loadingConsent")} />}
+          {isError && <EmptyState message={t("rediscovery.apiError")} tone="danger" />}
           {data && (
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-xs text-text-primary">{lookedUp}:</span>
               <ConsentBadge status={data.status} />
               {data.consent?.updated_at && (
                 <span className="text-[11px] text-text-secondary">
-                  Last updated {new Date(data.consent.updated_at).toLocaleString()}
+                  {t("rediscovery.lastUpdated")} {new Date(data.consent.updated_at).toLocaleString()}
                 </span>
               )}
               <div className="flex gap-2">
@@ -83,14 +85,14 @@ function ConsentLookup() {
                   onClick={() => setConsent.mutate({ candidate_id: lookedUp, opted_in: true })}
                   className="rounded bg-success px-2.5 py-1 text-[11px] font-medium text-white disabled:opacity-50"
                 >
-                  Record Opt-In
+                  {t("rediscovery.recordOptIn")}
                 </button>
                 <button
                   disabled={setConsent.isPending}
                   onClick={() => setConsent.mutate({ candidate_id: lookedUp, opted_in: false })}
                   className="rounded border border-danger px-2.5 py-1 text-[11px] font-medium text-danger disabled:opacity-50"
                 >
-                  Record Opt-Out
+                  {t("rediscovery.recordOptOut")}
                 </button>
               </div>
             </div>
@@ -107,6 +109,7 @@ function ConsentLookup() {
 // ---------------------------------------------------------------------
 
 function RunMatching({ onRun }: { onRun: (circularId: string) => void }) {
+  const { t } = useI18n();
   const run = useRunRediscoveryMatch();
   const [targetCircularId, setTargetCircularId] = useState("");
   const [targetPosition, setTargetPosition] = useState("");
@@ -136,28 +139,28 @@ function RunMatching({ onRun }: { onRun: (circularId: string) => void }) {
 
   return (
     <div className="rounded-lg border border-border-soft bg-surface p-3">
-      <div className="mb-2 text-xs font-semibold text-text-primary">Run Talent Pool Matching</div>
+      <div className="mb-2 text-xs font-semibold text-text-primary">{t("rediscovery.runMatching")}</div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
         <input
           value={targetCircularId}
           onChange={(e) => setTargetCircularId(e.target.value)}
-          placeholder="Target circular ID (required)"
+          placeholder={t("rediscovery.targetCircular")}
           className="rounded-md border border-border-soft bg-background px-2 py-1.5 text-xs text-text-primary"
         />
         <input
           value={targetPosition}
           onChange={(e) => setTargetPosition(e.target.value)}
-          placeholder="Target position (optional)"
+          placeholder={t("rediscovery.targetPosition")}
           className="rounded-md border border-border-soft bg-background px-2 py-1.5 text-xs text-text-primary"
         />
         <input
           value={personaId}
           onChange={(e) => setPersonaId(e.target.value)}
-          placeholder="Persona ID (required)"
+          placeholder={t("rediscovery.personaId")}
           className="rounded-md border border-border-soft bg-background px-2 py-1.5 text-xs text-text-primary"
         />
         <label className="flex items-center gap-2 text-[11px] text-text-secondary">
-          Min fit score
+          {t("rediscovery.minFitScore")}
           <input
             type="number"
             min={0}
@@ -168,7 +171,7 @@ function RunMatching({ onRun }: { onRun: (circularId: string) => void }) {
           />
         </label>
         <label className="flex items-center gap-2 text-[11px] text-text-secondary">
-          Cooldown (days)
+          {t("rediscovery.cooldown")}
           <input
             type="number"
             min={0}
@@ -178,7 +181,7 @@ function RunMatching({ onRun }: { onRun: (circularId: string) => void }) {
           />
         </label>
         <label className="flex items-center gap-2 text-[11px] text-text-secondary">
-          Max candidates
+          {t("rediscovery.maxCandidates")}
           <input
             type="number"
             min={1}
@@ -189,7 +192,7 @@ function RunMatching({ onRun }: { onRun: (circularId: string) => void }) {
         </label>
         <label className="flex items-center gap-2 text-[11px] text-text-secondary">
           <input type="checkbox" checked={requireOptIn} onChange={(e) => setRequireOptIn(e.target.checked)} />
-          Require explicit opt-in
+          {t("rediscovery.requireOptIn")}
         </label>
       </div>
       <div className="mt-2">
@@ -198,18 +201,18 @@ function RunMatching({ onRun }: { onRun: (circularId: string) => void }) {
           onClick={trigger}
           className="rounded-md bg-agent px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
         >
-          {run.isPending ? "Running…" : "Run Matching"}
+          {run.isPending ? t("rediscovery.running") : t("rediscovery.runMatch")}
         </button>
       </div>
-      {run.isError && <div className="mt-2 text-xs text-danger">{(run.error as Error)?.message ?? "Run failed."}</div>}
+      {run.isError && <div className="mt-2 text-xs text-danger">{(run.error as Error)?.message ?? t("rediscovery.runFailed")}</div>}
       {run.data && (
         <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border-soft pt-2 text-[11px] sm:grid-cols-3 lg:grid-cols-6">
-          <Stat label="Considered" value={run.data.candidates_considered} />
-          <Stat label="Suggested" value={run.data.suggestions_created.length} tone="success" />
-          <Stat label="Below threshold" value={run.data.candidates_below_threshold} />
-          <Stat label="Excl. consent" value={run.data.candidates_excluded_consent} />
-          <Stat label="Excl. fraud" value={run.data.candidates_excluded_fraud} tone="danger" />
-          <Stat label="Excl. recent" value={run.data.candidates_excluded_recent} />
+          <Stat label={t("rediscovery.considered")} value={run.data.candidates_considered} />
+          <Stat label={t("rediscovery.suggested")} value={run.data.suggestions_created.length} tone="success" />
+          <Stat label={t("rediscovery.belowThreshold")} value={run.data.candidates_below_threshold} />
+          <Stat label={t("rediscovery.exclConsent")} value={run.data.candidates_excluded_consent} />
+          <Stat label={t("rediscovery.exclFraud")} value={run.data.candidates_excluded_fraud} tone="danger" />
+          <Stat label={t("rediscovery.exclRecent")} value={run.data.candidates_excluded_recent} />
         </div>
       )}
     </div>
@@ -231,6 +234,7 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: "su
 // ---------------------------------------------------------------------
 
 function SuggestionRow({ suggestion }: { suggestion: RediscoverySuggestion }) {
+  const { t } = useI18n();
   const review = useReviewRediscoverySuggestion();
   const sendOutreach = useSendRediscoveryOutreach();
   const [reason, setReason] = useState("");
@@ -262,7 +266,7 @@ function SuggestionRow({ suggestion }: { suggestion: RediscoverySuggestion }) {
       <div className="mt-2 text-xs text-text-primary">{suggestion.reason_description}</div>
       <div className="mt-1"><ReasonCode code={suggestion.reason_code} size="sm" /></div>
       <details className="mt-2">
-        <summary className="cursor-pointer text-xs text-agent underline">Why? (evidence)</summary>
+        <summary className="cursor-pointer text-xs text-agent underline">{t("rediscovery.whyEvidence")}</summary>
         <pre className="mt-1 max-h-48 overflow-auto rounded bg-background p-2 text-[11px] text-text-secondary">
           {JSON.stringify(suggestion.evidence, null, 2)}
         </pre>
@@ -273,12 +277,12 @@ function SuggestionRow({ suggestion }: { suggestion: RediscoverySuggestion }) {
           <textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="Mandatory reason for approving or rejecting this suggestion…"
+            placeholder={t("rediscovery.reasonPlaceholder")}
             rows={2}
             className="rounded-md border border-border-soft bg-background px-2 py-1.5 text-xs"
           />
           {pendingAction && !reason.trim() && (
-            <div className="text-xs text-danger">A reason is required before {pendingAction === "APPROVE" ? "approving" : "rejecting"}.</div>
+            <div className="text-xs text-danger">{t("rediscovery.reasonRequired", { action: pendingAction === "APPROVE" ? t("rediscovery.approving") : t("rediscovery.rejecting") })}</div>
           )}
           <div className="flex flex-wrap gap-2">
             <button
@@ -286,14 +290,14 @@ function SuggestionRow({ suggestion }: { suggestion: RediscoverySuggestion }) {
               onClick={() => submitReview("APPROVE")}
               className="rounded bg-success px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
             >
-              Approve
+              {t("rediscovery.approve")}
             </button>
             <button
               disabled={review.isPending}
               onClick={() => submitReview("REJECT")}
               className="rounded border border-danger px-3 py-1.5 text-xs font-medium text-danger disabled:opacity-50"
             >
-              Reject
+              {t("rediscovery.reject")}
             </button>
           </div>
           {review.isError && <div className="text-xs text-danger">{(review.error as Error)?.message}</div>}
@@ -303,7 +307,7 @@ function SuggestionRow({ suggestion }: { suggestion: RediscoverySuggestion }) {
       {suggestion.status === "APPROVED" && (
         <div className="mt-3 flex flex-col gap-2 border-t border-border-soft pt-2">
           <div className="text-[11px] text-text-secondary">
-            Approved by {suggestion.reviewed_by ?? "—"}
+            {t("rediscovery.approvedBy")} {suggestion.reviewed_by ?? "—"}
             {suggestion.review_reason ? `: "${suggestion.review_reason}"` : ""}
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -319,7 +323,7 @@ function SuggestionRow({ suggestion }: { suggestion: RediscoverySuggestion }) {
             <input
               value={templateCode}
               onChange={(e) => setTemplateCode(e.target.value)}
-              placeholder="Template code"
+              placeholder={t("rediscovery.templateCode")}
               className="rounded-md border border-border-soft bg-background px-2 py-1 text-xs text-text-primary"
             />
             <button
@@ -329,19 +333,19 @@ function SuggestionRow({ suggestion }: { suggestion: RediscoverySuggestion }) {
               }
               className="rounded-md bg-human px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
             >
-              {sendOutreach.isPending ? "Sending…" : "Send Outreach"}
+              {sendOutreach.isPending ? t("rediscovery.sending") : t("rediscovery.sendOutreach")}
             </button>
           </div>
           {sendOutreach.data && sendOutreach.data.skipped.length > 0 && (
             <div className="text-xs text-danger">{sendOutreach.data.skipped[0].reason}</div>
           )}
-          {sendOutreach.data && sendOutreach.data.sent.length > 0 && <div className="text-xs text-success">Outreach sent.</div>}
+          {sendOutreach.data && sendOutreach.data.sent.length > 0 && <div className="text-xs text-success">{t("rediscovery.outreachSent")}</div>}
         </div>
       )}
 
       {suggestion.status === "REJECTED" && (
         <div className="mt-3 border-t border-border-soft pt-2 text-[11px] text-text-secondary">
-          Rejected by {suggestion.reviewed_by ?? "—"}
+          {t("rediscovery.rejectedBy")} {suggestion.reviewed_by ?? "—"}
           {suggestion.review_reason ? `: "${suggestion.review_reason}"` : ""}
         </div>
       )}
@@ -354,14 +358,15 @@ function SuggestionRow({ suggestion }: { suggestion: RediscoverySuggestion }) {
 // ---------------------------------------------------------------------
 
 function OutreachHistory({ targetCircularId }: { targetCircularId: string | null }) {
+  const { t } = useI18n();
   const { data, isLoading, isError } = useRediscoveryOutreachHistory(
     targetCircularId ? { target_circular_id: targetCircularId } : {}
   );
 
-  if (isLoading) return <EmptyState message="Loading outreach history…" />;
-  if (isError) return <EmptyState message="Could not reach the rediscovery API." tone="danger" />;
+  if (isLoading) return <EmptyState message={t("rediscovery.loadingHistory")} />;
+  if (isError) return <EmptyState message={t("rediscovery.apiError")} tone="danger" />;
   if (!data || data.outreach.length === 0) {
-    return <EmptyState message="No outreach sent yet. Approve a suggestion above and send it to see history here." />;
+    return <EmptyState message={t("rediscovery.noHistory")} />;
   }
 
   return (
@@ -369,12 +374,12 @@ function OutreachHistory({ targetCircularId }: { targetCircularId: string | null
       <table className="w-full text-left text-xs">
         <thead className="bg-background">
           <tr className="text-text-secondary">
-            <th className="px-3 py-2">Candidate</th>
-            <th className="px-3 py-2">Circular</th>
-            <th className="px-3 py-2">Channel</th>
-            <th className="px-3 py-2">Template</th>
-            <th className="px-3 py-2">Sent At</th>
-            <th className="px-3 py-2">Response</th>
+            <th className="px-3 py-2">{t("rediscovery.candidate")}</th>
+            <th className="px-3 py-2">{t("rediscovery.circular")}</th>
+            <th className="px-3 py-2">{t("rediscovery.channel")}</th>
+            <th className="px-3 py-2">{t("rediscovery.template")}</th>
+            <th className="px-3 py-2">{t("rediscovery.sentAt")}</th>
+            <th className="px-3 py-2">{t("rediscovery.response")}</th>
           </tr>
         </thead>
         <tbody>
@@ -399,6 +404,7 @@ function OutreachHistory({ targetCircularId }: { targetCircularId: string | null
 // ---------------------------------------------------------------------
 
 export function RediscoveryPanel() {
+  const { t } = useI18n();
   const [activeCircularId, setActiveCircularId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<RediscoverySuggestionStatus | "">("");
   const { data, isLoading, isError } = useRediscoverySuggestions({
@@ -406,7 +412,7 @@ export function RediscoveryPanel() {
     status: statusFilter || undefined,
   });
 
-  if (!getToken()) return <EmptyState message="Connect with a dev token to use candidate rediscovery." />;
+  if (!getToken()) return <EmptyState message={t("rediscovery.tokenRequired")} />;
 
   return (
     <div className="flex flex-col gap-4">
@@ -416,13 +422,13 @@ export function RediscoveryPanel() {
       <div>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <div className="text-xs font-semibold text-text-primary">
-            Suggestions{activeCircularId ? ` for ${activeCircularId}` : ""}
+            {t("rediscovery.suggestions")}{activeCircularId ? ` ${t("rediscovery.forCircular", { circularId: activeCircularId })}` : ""}
           </div>
           <div className="flex items-center gap-2">
             <input
               value={activeCircularId ?? ""}
               onChange={(e) => setActiveCircularId(e.target.value || null)}
-              placeholder="Filter by circular ID"
+              placeholder={t("rediscovery.filterCircular")}
               className="rounded-md border border-border-soft bg-background px-2 py-1 text-xs text-text-primary"
             />
             <select
@@ -430,18 +436,18 @@ export function RediscoveryPanel() {
               onChange={(e) => setStatusFilter(e.target.value as RediscoverySuggestionStatus | "")}
               className="rounded-md border border-border-soft bg-background px-2 py-1 text-xs text-text-primary"
             >
-              <option value="">All statuses</option>
-              <option value="PENDING_REVIEW">Pending Review</option>
-              <option value="APPROVED">Approved</option>
-              <option value="REJECTED">Rejected</option>
+              <option value="">{t("rediscovery.allStatuses")}</option>
+              <option value="PENDING_REVIEW">{t("rediscovery.pendingReview")}</option>
+              <option value="APPROVED">{t("rediscovery.approve")}</option>
+              <option value="REJECTED">{t("rediscovery.reject")}</option>
             </select>
           </div>
         </div>
 
-        {isLoading && <EmptyState message="Loading suggestions…" />}
-        {isError && <EmptyState message="Could not reach the rediscovery API." tone="danger" />}
+        {isLoading && <EmptyState message={t("rediscovery.loadingSuggestions")} />}
+        {isError && <EmptyState message={t("rediscovery.apiError")} tone="danger" />}
         {data && data.suggestions.length === 0 && (
-          <EmptyState message="No suggestions yet. Run matching above against a target circular and persona to populate this list." />
+          <EmptyState message={t("rediscovery.noSuggestions")} />
         )}
         {data && data.suggestions.length > 0 && (
           <div className="flex flex-col gap-3">
@@ -453,7 +459,7 @@ export function RediscoveryPanel() {
       </div>
 
       <div>
-        <div className="mb-2 text-xs font-semibold text-text-primary">Sent Outreach History</div>
+        <div className="mb-2 text-xs font-semibold text-text-primary">{t("rediscovery.outreachHistory")}</div>
         <OutreachHistory targetCircularId={activeCircularId} />
       </div>
     </div>

@@ -7,10 +7,12 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getToken, API_V1 } from "../api/client";
+import { useI18n } from "../i18n";
 import { getIcon } from "./navigation/iconRegistry";
 import { Icon } from "./navigation/Icon";
 
 export function EmailIntakePanel() {
+  const { t } = useI18n();
   const hasToken = !!getToken();
 
   const { data, isLoading, refetch } = useQuery({
@@ -39,12 +41,12 @@ export function EmailIntakePanel() {
       });
       const data = await res.json();
       if (res.ok) {
-        setImportResult(`Email imported as candidate ${data.candidate_id}.`);
+        setImportResult(t("email.importSuccess", { id: data.candidate_id }));
       } else {
-        setImportResult(`Import failed: ${data.error}`);
+        setImportResult(t("email.importFailed", { error: data.error }));
       }
     } catch {
-      setImportResult("Network error during import.");
+      setImportResult(t("email.networkError"));
     } finally {
       setImporting(false);
     }
@@ -59,33 +61,33 @@ export function EmailIntakePanel() {
         <div className="flex items-center gap-2">
           <span className={`inline-block h-2 w-2 rounded-full ${connected ? "bg-success" : "bg-attention"}`} />
           <span className="text-xs text-text-secondary">
-            {connected ? "IMAP connected" : "IMAP not connected"}
+            {connected ? t("email.imapConnected") : t("email.imapNotConnected")}
           </span>
         </div>
         <button
           onClick={() => refetch()}
           className="rounded border border-border-soft px-2 py-1 text-xs text-text-secondary hover:text-text-primary"
         >
-          Refresh
+          {t("email.refresh")}
         </button>
       </div>
 
       {!hasToken ? (
-        <p className="text-sm text-text-secondary">Sign in to access email intake.</p>
+        <p className="text-sm text-text-secondary">{t("email.signInPrompt")}</p>
       ) : isLoading ? (
-        <p className="text-sm text-text-secondary">Checking email connection…</p>
+        <p className="text-sm text-text-secondary">{t("email.checking")}</p>
       ) : !connected ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border-soft py-8">
           <Icon icon={getIcon("Mail")} size={24} tone="neutral" />
           <p className="max-w-sm text-center text-sm text-text-secondary">
-            {data?.message ?? "IMAP not configured. Add IMAP credentials in Settings → Integrations to connect your email inbox."}
+            {data?.message ?? t("email.notConfigured")}
           </p>
-          <p className="text-xs text-agent">Go to Settings → Integrations → Email to configure.</p>
+          <p className="text-xs text-agent">{t("email.goConfigure")}</p>
         </div>
       ) : emails.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border-soft py-8">
           <Icon icon={getIcon("Mailbox")} size={24} tone="neutral" />
-          <p className="text-sm text-text-secondary">No unread emails found.</p>
+          <p className="text-sm text-text-secondary">{t("email.noUnread")}</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -93,15 +95,15 @@ export function EmailIntakePanel() {
             <div key={i} className="rounded border border-border-soft p-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-xs font-medium text-text-primary">{String(email.subject ?? "No subject")}</div>
-                  <div className="text-xs text-text-secondary">From: {String(email.from ?? "Unknown")}</div>
+                  <div className="text-xs font-medium text-text-primary">{String(email.subject ?? t("email.noSubject"))}</div>
+                  <div className="text-xs text-text-secondary">{t("email.from")} {String(email.from ?? t("email.unknown"))}</div>
                 </div>
                 <button
                   disabled={importing}
                   onClick={() => handleImport(String(email.message_id ?? i))}
                   className="rounded bg-agent px-3 py-1 text-xs text-white disabled:opacity-40"
                 >
-                  Import
+                  {t("email.import")}
                 </button>
               </div>
             </div>

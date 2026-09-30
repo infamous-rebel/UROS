@@ -21,6 +21,7 @@ import { DownloadButton } from "./DownloadButton";
 import { getIcon } from "./navigation/iconRegistry";
 import { Icon } from "./navigation/Icon";
 import { ReasonCode } from "./ReasonCode";
+import { useI18n } from "../i18n";
 
 type DraftQuestion = Omit<ApiExamQuestion, "question_id" | "section_id"> & { question_id: string };
 type DraftSection = Omit<ApiExamSection, "section_id" | "exam_id" | "questions"> & { section_id: string; questions: DraftQuestion[] };
@@ -75,21 +76,22 @@ function WhyLink({ reasonCode, reasonDescription, evidenceRows }: { reasonCode: 
 }
 
 function QuestionEvidenceRow({ q }: { q: QuestionScoreEvidence }) {
+  const { t } = useI18n();
   return (
     <div className="rounded border border-border-soft bg-surface p-2">
       <div className="flex items-center justify-between">
         <span className="text-xs text-text-primary">{q.evidence.question_text}</span>
-        <span className="text-xs font-medium text-agent">{q.marks_awarded} marks</span>
+        <span className="text-xs font-medium text-agent">{q.marks_awarded} {t("exam.score")}</span>
       </div>
       <WhyLink
         reasonCode={q.reason_code}
         reasonDescription={q.reason_description}
         evidenceRows={[
-          ["Candidate answer", q.evidence.submitted_answer ?? "—"],
-          ["Correct answer", q.evidence.correct_answer ?? "—"],
-          ["Marks available", String(q.evidence.marks_available)],
-          ["Negative mark", String(q.evidence.negative_mark)],
-          ["Rule applied", q.evidence.rule_applied],
+          [t("exam.candidateAnswer"), q.evidence.submitted_answer ?? "—"],
+          [t("exam.correctAnswer"), q.evidence.correct_answer ?? "—"],
+          [t("exam.marksAvailable"), String(q.evidence.marks_available)],
+          [t("exam.negativeMark"), String(q.evidence.negative_mark)],
+          [t("exam.ruleApplied"), q.evidence.rule_applied],
         ]}
       />
     </div>
@@ -97,6 +99,7 @@ function QuestionEvidenceRow({ q }: { q: QuestionScoreEvidence }) {
 }
 
 function SubmissionRow({ examId, submission }: { examId: string; submission: DigitalExamSubmission }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const score = useScoreSubmission(examId);
   const grade = useGradeSubmission(examId);
@@ -114,11 +117,11 @@ function SubmissionRow({ examId, submission }: { examId: string; submission: Dig
           <span className="text-sm font-medium text-agent">{submission.score ?? "—"}</span>
           {submission.status === "SUBMITTED" && (
             <button onClick={() => score.mutate(submission.submission_id)} className="rounded bg-agent px-2 py-1 text-[11px] font-medium text-white">
-              Score
+              {t("exam.score")}
             </button>
           )}
           <button onClick={() => setExpanded((e) => !e)} className="text-[11px] text-text-secondary">
-            {expanded ? "Hide" : "Details"}
+            {expanded ? t("exam.hide") : t("exam.details")}
           </button>
         </div>
       </div>
@@ -142,7 +145,7 @@ function SubmissionRow({ examId, submission }: { examId: string; submission: Dig
                     <input
                       value={gradeReason[q.question_id] ?? ""}
                       onChange={(e) => setGradeReason((prev) => ({ ...prev, [q.question_id]: e.target.value }))}
-                      placeholder="Mandatory grading reason…"
+                      placeholder={t("exam.gradingReason")}
                       className="flex-1 rounded border border-border-soft bg-background px-1 py-0.5 text-xs"
                     />
                     <button
@@ -157,7 +160,7 @@ function SubmissionRow({ examId, submission }: { examId: string; submission: Dig
                       }
                       className="rounded bg-human px-2 py-1 text-[11px] font-medium text-white disabled:opacity-50"
                     >
-                      Grade
+                      {t("exam.grade")}
                     </button>
                   </div>
                 )}
@@ -171,9 +174,10 @@ function SubmissionRow({ examId, submission }: { examId: string; submission: Dig
 }
 
 function ResultsPanel({ examId }: { examId: string }) {
+  const { t } = useI18n();
   const { data, isLoading } = useExamResults(examId);
-  if (isLoading || !data) return <EmptyState message="Loading submissions…" />;
-  if (data.submissions.length === 0) return <EmptyState message="No submissions yet for this exam." />;
+  if (isLoading || !data) return <EmptyState message={t("exam.loadingSubmissions")} />;
+  if (data.submissions.length === 0) return <EmptyState message={t("exam.noSubmissions")} />;
 
   return (
     <div className="flex flex-col gap-2">
@@ -186,8 +190,8 @@ function ResultsPanel({ examId }: { examId: string }) {
           ))}
         </div>
         <div className="ml-auto flex gap-2">
-          <DownloadButton endpoint={`${API_V1}/exams/${examId}/export?format=pdf`} format="pdf" filename={`exam-${examId.slice(0, 8)}.pdf`} label="Results PDF" size="sm" />
-          <DownloadButton endpoint={`${API_V1}/exams/${examId}/export?format=docx`} format="docx" filename={`exam-${examId.slice(0, 8)}.docx`} label="Results DOCX" size="sm" />
+          <DownloadButton endpoint={`${API_V1}/exams/${examId}/export?format=pdf`} format="pdf" filename={`exam-${examId.slice(0, 8)}.pdf`} label={t("exam.resultsPdf")} size="sm" />
+          <DownloadButton endpoint={`${API_V1}/exams/${examId}/export?format=docx`} format="docx" filename={`exam-${examId.slice(0, 8)}.docx`} label={t("exam.resultsDocx")} size="sm" />
         </div>
       </div>
       {data.submissions.map((s) => (
@@ -198,6 +202,7 @@ function ResultsPanel({ examId }: { examId: string }) {
 }
 
 function QuestionEditor({ question, onChange, onDelete }: { question: DraftQuestion; onChange: (q: DraftQuestion) => void; onDelete: () => void }) {
+  const { t } = useI18n();
   return (
     <div className="cursor-move rounded-md border border-border-soft bg-background p-2">
       <div className="flex items-center gap-2">
@@ -213,13 +218,13 @@ function QuestionEditor({ question, onChange, onDelete }: { question: DraftQuest
           }
           className="rounded border border-border-soft bg-surface px-1.5 py-1 text-xs"
         >
-          <option value="MCQ">MCQ</option>
-          <option value="SHORT_ANSWER">Short Answer</option>
+          <option value="MCQ">{t("exam.mcq")}</option>
+          <option value="SHORT_ANSWER">{t("exam.shortAnswer")}</option>
         </select>
         <input
           value={question.question_text}
           onChange={(e) => onChange({ ...question, question_text: e.target.value })}
-          placeholder="Question text…"
+          placeholder={t("exam.questionText")}
           className="flex-1 rounded border border-border-soft bg-surface px-2 py-1 text-xs"
         />
         <input
@@ -228,7 +233,7 @@ function QuestionEditor({ question, onChange, onDelete }: { question: DraftQuest
           value={question.marks}
           onChange={(e) => onChange({ ...question, marks: Number(e.target.value) })}
           className="w-14 rounded border border-border-soft bg-surface px-1.5 py-1 text-xs"
-          title="Marks"
+          title={t("exam.marks")}
         />
         <input
           type="number"
@@ -236,7 +241,7 @@ function QuestionEditor({ question, onChange, onDelete }: { question: DraftQuest
           value={question.negative_mark}
           onChange={(e) => onChange({ ...question, negative_mark: Number(e.target.value) })}
           className="w-14 rounded border border-border-soft bg-surface px-1.5 py-1 text-xs"
-          title="Negative mark"
+          title={t("exam.negativeMark")}
         />
         {question.source !== "MANUAL" && <span className="text-[10px] text-text-secondary">{question.source}</span>}
         <button onClick={onDelete} className="text-xs text-danger">
@@ -262,7 +267,7 @@ function QuestionEditor({ question, onChange, onDelete }: { question: DraftQuest
                 name={`correct-${question.question_id}`}
                 checked={question.correct_answer === opt.key}
                 onChange={() => onChange({ ...question, correct_answer: opt.key })}
-                title="Mark as correct answer"
+                title={t("exam.markCorrect")}
               />
             </div>
           ))}
@@ -273,7 +278,7 @@ function QuestionEditor({ question, onChange, onDelete }: { question: DraftQuest
             }}
             className="w-fit text-[11px] text-agent underline"
           >
-            + Add option
+            {t("exam.addOption")}
           </button>
         </div>
       )}
@@ -282,6 +287,7 @@ function QuestionEditor({ question, onChange, onDelete }: { question: DraftQuest
 }
 
 export function DigitalExamBuilder() {
+  const { t } = useI18n();
   const { data: examListData } = useExamList();
   const { data: personasData } = usePersonas();
   const [activeExamId, setActiveExamId] = useState<string | null>(null);
@@ -444,7 +450,7 @@ export function DigitalExamBuilder() {
     }
   };
 
-  if (!getToken()) return <EmptyState message="Connect with a dev token to use the Digital Exam Paper Creator." />;
+  if (!getToken()) return <EmptyState message={t("exam.tokenRequired")} />;
 
   return (
     <div className="flex flex-col gap-4">
@@ -455,7 +461,7 @@ export function DigitalExamBuilder() {
           onChange={(e) => (e.target.value ? loadExam(e.target.value) : setActiveExamId(null))}
           className="rounded-md border border-border-soft bg-surface px-2 py-1.5 text-xs"
         >
-          <option value="">+ New exam paper</option>
+          <option value="">{t("exam.newExam")}</option>
           {(examListData?.exams ?? []).map((e) => (
             <option key={e.exam_id} value={e.exam_id}>
               {e.title} ({e.status})
@@ -464,7 +470,7 @@ export function DigitalExamBuilder() {
         </select>
         {paperData?.paper && <Badge label={paperData.paper.exam.status} />}
         <label className="cursor-pointer rounded-md border border-border-soft px-2.5 py-1.5 text-xs text-text-secondary">
-          Upload &amp; Parse Paper
+          {t("exam.uploadParse")}
           <input
             type="file"
             accept=".docx,.jpg,.jpeg,.png,.txt"
@@ -476,11 +482,11 @@ export function DigitalExamBuilder() {
             }}
           />
         </label>
-        {parse.isPending && <span className="text-xs text-text-secondary">Parsing…</span>}
+        {parse.isPending && <span className="text-xs text-text-secondary">{t("exam.parsing")}</span>}
         {activeExamId && (
           <div className="ml-auto flex gap-2">
-            <DownloadButton endpoint={`${API_V1}/exams/${activeExamId}/export?format=pdf`} format="pdf" filename="exam-paper.pdf" label="Paper PDF" size="sm" />
-            <DownloadButton endpoint={`${API_V1}/exams/${activeExamId}/export?format=docx`} format="docx" filename="exam-paper.docx" label="Paper DOCX" size="sm" />
+            <DownloadButton endpoint={`${API_V1}/exams/${activeExamId}/export?format=pdf`} format="pdf" filename="exam-paper.pdf" label={t("exam.paperPdf")} size="sm" />
+            <DownloadButton endpoint={`${API_V1}/exams/${activeExamId}/export?format=docx`} format="docx" filename="exam-paper.docx" label={t("exam.paperDocx")} size="sm" />
           </div>
         )}
       </div>
@@ -488,26 +494,26 @@ export function DigitalExamBuilder() {
 
       {/* Guided step 2-3: persona + metadata (topics/weights live on each section below) */}
       <div className="grid grid-cols-1 gap-2 rounded-lg border border-border-soft bg-surface p-3 sm:grid-cols-2">
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Exam title" className="rounded border border-border-soft bg-background px-2 py-1.5 text-sm" />
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("exam.titlePlaceholder")} className="rounded border border-border-soft bg-background px-2 py-1.5 text-sm" />
         <select value={personaId} onChange={(e) => setPersonaId(e.target.value)} className="rounded border border-border-soft bg-background px-2 py-1.5 text-sm">
-          <option value="">Choose persona (optional)…</option>
+          <option value="">{t("exam.personaPlaceholder")}</option>
           {(personasData?.personas ?? []).map((p: any) => (
             <option key={p.persona_id} value={p.persona_id}>
               {p.name}
             </option>
           ))}
         </select>
-        <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" className="rounded border border-border-soft bg-background px-2 py-1.5 text-sm sm:col-span-2" />
+        <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("exam.descPlaceholder")} className="rounded border border-border-soft bg-background px-2 py-1.5 text-sm sm:col-span-2" />
         <input
           type="number"
           min={1}
           value={durationMinutes}
           onChange={(e) => setDurationMinutes(e.target.value ? Number(e.target.value) : "")}
-          placeholder="Duration (minutes)"
+          placeholder={t("exam.durationPlaceholder")}
           className="rounded border border-border-soft bg-background px-2 py-1.5 text-sm"
         />
         <div className="flex items-center text-sm text-text-secondary">
-          Total marks: <span className="ml-1 font-medium text-agent">{totalMarks}</span>
+          {t("exam.totalMarks")}: <span className="ml-1 font-medium text-agent">{totalMarks}</span>
         </div>
       </div>
 
@@ -535,7 +541,7 @@ export function DigitalExamBuilder() {
               <input
                 value={section.topic ?? ""}
                 onChange={(e) => setSections((prev) => prev.map((s) => (s.section_id === section.section_id ? { ...s, topic: e.target.value } : s)))}
-                placeholder="Topic"
+                placeholder={t("exam.topic")}
                 className="w-32 rounded border border-border-soft bg-background px-2 py-1 text-xs"
               />
               <input
@@ -546,11 +552,11 @@ export function DigitalExamBuilder() {
                 onChange={(e) =>
                   setSections((prev) => prev.map((s) => (s.section_id === section.section_id ? { ...s, weight: e.target.value ? Number(e.target.value) : null } : s)))
                 }
-                placeholder="Weight %"
+                placeholder={t("exam.weightPct")}
                 className="w-20 rounded border border-border-soft bg-background px-2 py-1 text-xs"
               />
               <button onClick={() => setSections((prev) => prev.filter((s) => s.section_id !== section.section_id))} className="text-xs text-danger">
-                Remove Section
+                {t("exam.removeSection")}
               </button>
             </div>
             <div className="flex flex-col gap-1.5">
@@ -584,27 +590,27 @@ export function DigitalExamBuilder() {
               ))}
             </div>
             <button onClick={() => addQuestion(section.section_id)} className="mt-2 text-xs text-agent underline">
-              + Add question
+              {t("exam.addQuestion")}
             </button>
           </div>
         ))}
         <button onClick={addSection} className="rounded-md border border-dashed border-border-soft py-2 text-xs text-text-secondary">
-          + Add section
+          {t("exam.addSection")}
         </button>
       </div>
 
       {/* Live preview */}
       {sections.length > 0 && (
         <div className="rounded-lg border border-border-soft bg-background p-4">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">Live Preview</div>
-          <div className="text-lg font-semibold text-text-primary">{title || "Untitled Exam"}</div>
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">{t("exam.livePreview")}</div>
+          <div className="text-lg font-semibold text-text-primary">{title || t("exam.untitled")}</div>
           {description && <div className="text-sm text-text-secondary">{description}</div>}
           {sections.map((s) => (
             <div key={s.section_id} className="mt-3">
               <div className="text-sm font-medium text-text-primary underline">{s.section_name}</div>
               {s.questions.map((q, i) => (
                 <div key={q.question_id} className="mt-1 text-xs text-text-secondary">
-                  {i + 1}. {q.question_text || "(untitled question)"} [{q.marks} marks]
+                  {i + 1}. {q.question_text || t("exam.untitledQ")} [{q.marks} {t("exam.marks")}]
                   {q.question_type === "MCQ" &&
                     (q.options ?? []).map((o) => (
                       <div key={o.key} className="pl-4">
@@ -621,23 +627,23 @@ export function DigitalExamBuilder() {
       {/* Actions: save, publish (human approval gate), export */}
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={handleSave} disabled={save.isPending || !title || sections.length === 0} className="rounded-md bg-agent px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">
-          {save.isPending ? "Saving…" : activeExamId ? "Save Changes" : "Create Exam"}
+          {save.isPending ? t("exam.saving") : activeExamId ? t("exam.saveChanges") : t("exam.createExam")}
         </button>
         {activeExamId && paperData?.paper.exam.status !== "PUBLISHED" && (
           <button onClick={() => publish.mutate(activeExamId)} disabled={publish.isPending} className="rounded-md bg-human px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">
-            {publish.isPending ? "Publishing…" : "Publish (Approve)"}
+            {publish.isPending ? t("exam.publishing") : t("exam.publishApprove")}
           </button>
         )}
         {activeExamId && (
           <>
             <button onClick={() => downloadExamExport(activeExamId, "pdf")} className="rounded-md border border-border-soft px-3 py-1.5 text-xs text-text-secondary">
-              Export PDF
+              {t("exam.exportPdf")}
             </button>
             <button onClick={() => downloadExamExport(activeExamId, "docx")} className="rounded-md border border-border-soft px-3 py-1.5 text-xs text-text-secondary">
-              Export DOCX
+              {t("exam.exportDocx")}
             </button>
             <button onClick={() => downloadExamExport(activeExamId, "interactive_pdf")} className="rounded-md border border-border-soft px-3 py-1.5 text-xs text-text-secondary">
-              Export Interactive PDF
+              {t("exam.exportInteractive")}
             </button>
             <button
               onClick={async () => {
@@ -646,17 +652,17 @@ export function DigitalExamBuilder() {
               }}
               className="rounded-md border border-border-soft px-3 py-1.5 text-xs text-text-secondary"
             >
-              Copy Digital Link
+              {t("exam.copyLink")}
             </button>
           </>
         )}
       </div>
-      {save.isError && <EmptyState message={(save.error as Error)?.message ?? "Save failed."} tone="danger" />}
+      {save.isError && <EmptyState message={(save.error as Error)?.message ?? t("exam.saveFailed")} tone="danger" />}
 
       {/* Results — every result carries reason_code/reason_description/evidence via the "Why?" link */}
       {activeExamId && (
         <div className="flex flex-col gap-2">
-          <div className="text-sm font-medium text-text-primary">Submissions &amp; Results</div>
+          <div className="text-sm font-medium text-text-primary">{t("exam.submissions")}</div>
           <ResultsPanel examId={activeExamId} />
         </div>
       )}

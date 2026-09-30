@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { authedRequest } from "../api/client";
+import { useI18n } from "../i18n";
 
 interface VerificationEntry {
   candidate_id: string;
@@ -15,6 +16,7 @@ interface VerificationEntry {
 }
 
 export function VerificationCenter() {
+  const { t } = useI18n();
   const [entries, setEntries] = useState<VerificationEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "pending" | "verified" | "failed">("all");
@@ -57,7 +59,7 @@ export function VerificationCenter() {
   };
 
   if (loading) {
-    return <div className="py-8 text-center text-sm text-text-secondary">Loading verifications...</div>;
+    return <div className="py-8 text-center text-sm text-text-secondary">{t("verification.loading")}</div>;
   }
 
   return (
@@ -74,7 +76,7 @@ export function VerificationCenter() {
                 : "bg-background text-text-secondary hover:text-text-primary"
             }`}
           >
-            {f.charAt(0).toUpperCase() + f.slice(1)} ({counts[f]})
+            {t(`verification.${f}` as any)} ({counts[f]})
           </button>
         ))}
       </div>
@@ -82,17 +84,17 @@ export function VerificationCenter() {
       {/* Table */}
       {filtered.length === 0 ? (
         <div className="py-8 text-center text-sm text-text-secondary">
-          No verifications found
+          {t("verification.none")}
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-border-soft">
           <table className="w-full text-left text-xs">
             <thead className="bg-background text-text-secondary">
               <tr>
-                <th className="px-4 py-2 font-medium">Candidate</th>
-                <th className="px-4 py-2 font-medium">Type</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 font-medium">Verified At</th>
+                <th className="px-4 py-2 font-medium">{t("verification.candidate")}</th>
+                <th className="px-4 py-2 font-medium">{t("verification.type")}</th>
+                <th className="px-4 py-2 font-medium">{t("verification.status")}</th>
+                <th className="px-4 py-2 font-medium">{t("verification.verifiedAt")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border-soft">
