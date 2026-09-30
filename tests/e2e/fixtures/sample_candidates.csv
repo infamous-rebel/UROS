@@ -1,0 +1,6 @@
+full_name,email,phone,position_applied,source_platform
+Test Candidate One,test1@example.com,+8801712345678,Software Engineer,bdjobs
+Test Candidate Two,test2@example.com,+8801812345679,Product Manager,bdjobs
+Test Candidate Three,test3@example.com,+8801912345680,Data Analyst,teletalk
+Test Candidate Four,test4@example.com,+8801612345681,UX Designer,bdjobs
+Test Candidate Five,test5@example.com,+8801512345682,DevOps Engineer,teletalk
