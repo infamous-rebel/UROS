@@ -888,5 +888,10 @@
   "settings.requesting": "Requesting…",
   "settings.exportNum": "Export #{{id}}",
   "settings.requested": "Requested",
-  "settings.downloadExport": "Download Export"
+  "settings.downloadExport": "Download Export",
+  "theme.light": "Light",
+  "theme.dark": "Dark",
+  "theme.system": "System",
+  "theme.description": "Choose how UROS looks. Dark mode uses a warm grey, not pure black.",
+  "settings.theme": "Appearance"
 }

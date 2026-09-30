@@ -2,8 +2,81 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * UROS Color Token System
+ * Light mode (default) and Dark mode via [data-theme="dark"] on <html>.
+ * All components reference these CSS custom properties through Tailwind.
+ * No hardcoded hex in any component file.
+ *
+ * Color language:
+ *   Teal   = agent/machine work
+ *   Terracotta = human decision/action
+ *   Amber  = needs review/attention
+ */
+
+/* ─── Light theme (default) ─────────────────────────────────────── */
+:root,
+[data-theme="light"] {
+  --color-background: #FAF9F5;
+  --color-surface: #FFFFFF;
+  --color-text-primary: #1F1E1D;
+  --color-text-secondary: #6B6560;
+  --color-agent: #0F766E;
+  --color-human: #E2725B;
+  --color-attention: #D97706;
+  --color-success: #15803D;
+  --color-danger: #B91C1C;
+  --color-border-soft: #E7E5E4;
+
+  /* Derived / utility tokens */
+  --color-background-hover: #F3F1EC;
+  --color-surface-hover: #F9F8F5;
+  --color-agent-light: #0F766E14;
+  --color-human-light: #E2725B14;
+  --color-attention-light: #D9770614;
+  --color-text-tertiary: #9C9590;
+  --color-overlay: rgba(0, 0, 0, 0.3);
+  --color-scrollbar: rgba(148, 163, 184, 0.3);
+  --color-scrollbar-hover: rgba(148, 163, 184, 0.5);
+}
+
+/* ─── Dark theme ────────────────────────────────────────────────── */
+/* Deep warm grey, not pure black. Warm off-white text, not pure white.
+   Agent teal lightened for contrast. Terracotta warmed and lightened. */
+[data-theme="dark"] {
+  --color-background: #1C1B19;
+  --color-surface: #26241F;
+  --color-text-primary: #F0EEE9;
+  --color-text-secondary: #A39E96;
+  --color-agent: #14B8A6;
+  --color-human: #F08060;
+  --color-attention: #F59E0B;
+  --color-success: #22C55E;
+  --color-danger: #EF4444;
+  --color-border-soft: #3A3632;
+
+  --color-background-hover: #2E2C27;
+  --color-surface-hover: #2C2A25;
+  --color-agent-light: #14B8A620;
+  --color-human-light: #F0806020;
+  --color-attention-light: #F59E0B20;
+  --color-text-tertiary: #7A756E;
+  --color-overlay: rgba(0, 0, 0, 0.6);
+  --color-scrollbar: rgba(100, 100, 100, 0.3);
+  --color-scrollbar-hover: rgba(100, 100, 100, 0.5);
+}
+
+/* ─── Base styles ───────────────────────────────────────────────── */
 body {
   margin: 0;
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Smooth theme transition on major containers */
+* {
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 /* Subtle scrollbar for sidebar */
@@ -14,9 +87,9 @@ body {
   background: transparent;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.3);
+  background: var(--color-scrollbar);
   border-radius: 2px;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.5);
+  background: var(--color-scrollbar-hover);
 }

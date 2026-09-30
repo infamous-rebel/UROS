@@ -13,6 +13,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { API_V1, authedRequest } from "../api/client";
 import { DownloadButton } from "./DownloadButton";
+import { useTheme } from "../theme/ThemeContext";
+import type { ThemeMode } from "../theme/ThemeContext";
 import { getIcon } from "./navigation/iconRegistry";
 import { Icon } from "./navigation/Icon";
 import { useI18n } from "../i18n";
@@ -194,6 +196,10 @@ function ProfileTab() {
       <Field label={t("settings.role")}>
         <input value={user.role} disabled className={`${inputClass} opacity-50`} />
       </Field>
+
+      {/* Quest 05 Part 14 — Theme switcher */}
+      <ThemeSwitcher />
+
       <div className="flex items-center gap-3">
         <SaveButton onClick={handleSave} saving={saving} />
         {saved && <span className="text-xs text-success"><Icon icon={getIcon("Check")} size={12} tone="system" className="inline mr-1" />{t("settings.saved")}</span>}
@@ -226,7 +232,42 @@ function ProfileTab() {
   );
 }
 
-// ─── 2. Organization Tab ─────────────────────────────────────────────
+// ─── Theme Switcher (Quest 05 Part 14) ──────────────────────────────
+
+function ThemeSwitcher() {
+  const { t } = useI18n();
+  const { mode, resolved, setMode } = useTheme();
+  const options: { value: ThemeMode; label: string }[] = [
+    { value: "light", label: t("theme.light") },
+    { value: "dark", label: t("theme.dark") },
+    { value: "system", label: t("theme.system") },
+  ];
+  return (
+    <div className="mb-4">
+      <label className="mb-1 block text-xs font-medium text-text-secondary">{t("settings.theme")}</label>
+      <div className="flex gap-1">
+        {options.map((opt) => (
+          <button
+            key={opt.value}
+            onClick={() => setMode(opt.value)}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              mode === opt.value
+                ? "bg-agent text-white"
+                : "bg-background text-text-secondary hover:bg-background-hover hover:text-text-primary"
+            }`}
+          >
+            {opt.label}
+            {opt.value === "system" && resolved === "dark" && " (" + t("theme.dark") + ")"}
+            {opt.value === "system" && resolved === "light" && " (" + t("theme.light") + ")"}
+          </button>
+        ))}
+      </div>
+      <p className="mt-1 text-xs text-text-tertiary">{t("theme.description")}</p>
+    </div>
+  );
+}
+
+// ─── 2. Organization tab ─────────────────────────────────────────────
 
 function OrganizationTab() {
   const { t } = useI18n();

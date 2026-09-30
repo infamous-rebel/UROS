@@ -1,20 +1,30 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
+  // Dark mode is controlled via [data-theme="dark"] on <html>
+  // We don't use Tailwind's built-in dark mode — we manage it via CSS custom properties.
   theme: {
     extend: {
       colors: {
-        // UROS_Color_System.md — Layer 1: System / Product UI
-        background: "#FAF9F5",
-        surface: "#FFFFFF",
-        "text-primary": "#1F1E1D",
-        "text-secondary": "#6B6560",
-        agent: "#0F766E", // Deep teal — machine/agent work
-        human: "#E2725B", // Light terracotta — human decision/action
-        attention: "#D97706", // Amber — needs review / attention
-        success: "#15803D",
-        danger: "#B91C1C",
-        "border-soft": "#E7E5E4",
+        // All colors reference CSS custom properties defined in styles/index.css.
+        // This enables instant theme switching without class-name changes in every component.
+        background: "var(--color-background)",
+        "background-hover": "var(--color-background-hover)",
+        surface: "var(--color-surface)",
+        "surface-hover": "var(--color-surface-hover)",
+        "text-primary": "var(--color-text-primary)",
+        "text-secondary": "var(--color-text-secondary)",
+        "text-tertiary": "var(--color-text-tertiary)",
+        agent: "var(--color-agent)",
+        "agent-light": "var(--color-agent-light)",
+        human: "var(--color-human)",
+        "human-light": "var(--color-human-light)",
+        attention: "var(--color-attention)",
+        "attention-light": "var(--color-attention-light)",
+        success: "var(--color-success)",
+        danger: "var(--color-danger)",
+        "border-soft": "var(--color-border-soft)",
+        overlay: "var(--color-overlay)",
       },
       fontFamily: {
         sans: ["Inter", "Manrope", "system-ui", "sans-serif"],

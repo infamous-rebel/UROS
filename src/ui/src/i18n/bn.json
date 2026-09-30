@@ -888,5 +888,10 @@
   "settings.requesting": "অনুরোধ হচ্ছে…",
   "settings.exportNum": "রপ্তানি #{{id}}",
   "settings.requested": "অনুরোধকৃত",
-  "settings.downloadExport": "রপ্তানি ডাউনলোড"
+  "settings.downloadExport": "রপ্তানি ডাউনলোড",
+  "theme.light": "হালকা",
+  "theme.dark": "গাঢ়",
+  "theme.system": "সিস্টেম",
+  "theme.description": "UROS কেমন দেখাবে বাছুন। গাঢ় মোড উষ্ণ ধূসর ব্যবহার করে, কালো নয়।",
+  "settings.theme": "চেহারা"
 }

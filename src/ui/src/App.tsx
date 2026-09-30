@@ -37,6 +37,7 @@ import { SessionManager } from "./components/auth/SessionManager";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { I18nProvider, useI18n } from "./i18n";
 import { ToastProvider } from "./components/Toast";
+import { ThemeProvider } from "./theme/ThemeContext";
 import { Sidebar } from "./components/navigation/Sidebar";
 import { Breadcrumb } from "./components/navigation/Breadcrumb";
 import { CommandPalette } from "./components/navigation/CommandPalette";
@@ -78,13 +79,15 @@ type TabKey = (typeof TABS)[number]["key"];
  */
 export function App() {
   return (
-    <I18nProvider>
-      <AuthProvider>
-        <ToastProvider>
-          <AppBody />
-        </ToastProvider>
-      </AuthProvider>
-    </I18nProvider>
+    <ThemeProvider>
+      <I18nProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <AppBody />
+          </ToastProvider>
+        </AuthProvider>
+      </I18nProvider>
+    </ThemeProvider>
   );
 }
 

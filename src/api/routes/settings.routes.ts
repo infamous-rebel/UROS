@@ -97,7 +97,7 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = await db.query(
-        `SELECT user_id, full_name, email, phone, role, preferred_language, preferred_org_id, created_at
+        `SELECT user_id, full_name, email, phone, role, preferred_language, preferred_org_id, theme_preference, created_at
          FROM users WHERE user_id = $1`,
         [req.user!.user_id]
       );
@@ -114,6 +114,7 @@ const UserProfileSchema = z.object({
   full_name: z.string().min(1).max(200).optional(),
   phone: z.string().min(6).max(20).optional(),
   preferred_language: z.string().min(2).max(5).optional(),
+  theme_preference: z.enum(["light", "dark", "system"]).optional(),
 });
 
 router.patch(
@@ -138,7 +139,7 @@ router.patch(
       params.push(req.user!.user_id);
       const updated = await db.query(
         `UPDATE users SET ${setClauses.join(", ")} WHERE user_id = $${params.length}
-         RETURNING user_id, full_name, email, phone, role, preferred_language`,
+         RETURNING user_id, full_name, email, phone, role, preferred_language, theme_preference`,
         params
       );
 
