@@ -242,6 +242,11 @@ jobs:
             (async () => {
               const c = new Client(process.env.DATABASE_URL);
               await c.connect();
+              await c.query(\`
+                INSERT INTO organizations (org_id, name, sector, deployment_mode)
+                VALUES ('00000000-0000-0000-0000-000000000001', 'UROS Test Org', 'GOVT_NONCADRE', 'CLOUD')
+                ON CONFLICT (org_id) DO NOTHING
+              \`);
               const hash = await bcrypt.hash('Admin@1234', 12);
               await c.query(\`
                 INSERT INTO users (email, password_hash, role, org_id, active, password_reset_required)
@@ -332,6 +337,11 @@ jobs:
             (async () => {
               const c = new Client(process.env.DATABASE_URL);
               await c.connect();
+              await c.query(\`
+                INSERT INTO organizations (org_id, name, sector, deployment_mode)
+                VALUES ('00000000-0000-0000-0000-000000000001', 'UROS Test Org', 'GOVT_NONCADRE', 'CLOUD')
+                ON CONFLICT (org_id) DO NOTHING
+              \`);
               const hash = await bcrypt.hash('Admin@1234', 12);
               await c.query(\`
                 INSERT INTO users (email, password_hash, role, org_id, active, password_reset_required)
