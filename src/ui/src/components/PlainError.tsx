@@ -4,7 +4,6 @@
  * Never shows raw error objects, stack traces, or class names.
  */
 
-import { useState } from "react";
 import { getIcon } from "./navigation/iconRegistry";
 import { Icon } from "./navigation/Icon";
 
@@ -36,8 +35,6 @@ const STATUS_MESSAGES: Record<number, string> = {
 };
 
 export function PlainError({ status, code, message, requestId, inline = false }: PlainErrorProps) {
-  const [showDetails, setShowDetails] = useState(false);
-
   const plainMessage = status ? STATUS_MESSAGES[status] : null;
   const displayMessage = plainMessage ?? message ?? "An unexpected error occurred.";
 
@@ -71,19 +68,24 @@ export function PlainError({ status, code, message, requestId, inline = false }:
         )}
 
         {/* Developer details (hidden by default) */}
-        {message && message !== displayMessage && (
-          <button
-            onClick={() => setShowDetails((s) => !s)}
-            className="mt-1 text-[10px] text-text-secondary hover:text-text-primary"
-          >
-            {showDetails ? "Hide details" : "Details"}
-          </button>
-        )}
-        {showDetails && message && (
-          <pre className="mt-1 max-h-32 overflow-auto rounded bg-background p-2 font-mono text-[10px] text-text-secondary">
-            {message}
-          </pre>
-        )}
+        {(message && message !== displayMessage) || code ? (
+          <details className="mt-2">
+            <summary className="cursor-pointer text-[10px] text-text-secondary hover:text-text-primary">
+              Developer details
+            </summary>
+            <div className="mt-1 space-y-1 rounded bg-background p-2 font-mono text-[10px] text-text-secondary">
+              {code && (
+                <div>
+                  <span className="text-text-secondary/70">Code: </span>
+                  <span className="text-danger">{code}</span>
+                </div>
+              )}
+              {message && message !== displayMessage && (
+                <div className="whitespace-pre-wrap break-words">{message}</div>
+              )}
+            </div>
+          </details>
+        ) : null}
       </div>
     </div>
   );

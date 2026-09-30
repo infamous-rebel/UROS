@@ -16,7 +16,6 @@ interface SidebarProps {
   activeItem: NavItemId;
   collapsed: boolean;
   pinned: NavItemId[];
-  recent: NavItemId[];
   onItemClick: (id: NavItemId) => void;
   onPin: (id: NavItemId) => void;
   onToggleCollapse: () => void;
@@ -29,7 +28,6 @@ export function Sidebar({
   activeItem,
   collapsed,
   pinned,
-  recent,
   onItemClick,
   onPin,
   onToggleCollapse,
@@ -58,11 +56,6 @@ export function Sidebar({
   const pinnedItems = navGroups
     .flatMap((g) => g.items)
     .filter((item) => pinned.includes(item.id));
-
-  const recentItems = navGroups
-    .flatMap((g) => g.items)
-    .filter((item) => recent.includes(item.id) && !pinned.includes(item.id))
-    .slice(0, 5);
 
   const isCollapsed = mobileOpen ? false : collapsed;
   const sidebarWidth = isCollapsed ? "w-16" : "w-60";

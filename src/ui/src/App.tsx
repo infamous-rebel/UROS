@@ -224,7 +224,6 @@ function Dashboard() {
         activeItem={navState.activeItem}
         collapsed={navState.collapsed}
         pinned={navState.pinned}
-        recent={navState.recent}
         onItemClick={handleNavigate}
         onPin={navState.togglePinned}
         onToggleCollapse={navState.toggleCollapsed}
