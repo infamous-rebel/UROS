@@ -2,32 +2,34 @@ import { useAuditStream } from "../api/hooks";
 import { getToken, ApiError, API_V1 } from "../api/client";
 import { DownloadButton } from "./DownloadButton";
 import { ReasonCode } from "./ReasonCode";
+import { useI18n } from "../i18n";
 
 export function AuditStream() {
   const { data, isLoading, isError, error } = useAuditStream();
   const hasToken = !!getToken();
+  const { t } = useI18n();
 
   const forbidden = error instanceof ApiError && error.status === 403;
 
   return (
     <div className="flex h-full flex-col rounded-lg border border-border-soft bg-surface p-4">
-      <h2 className="mb-3 text-sm font-semibold text-text-primary">Audit Stream</h2>
+      <h2 className="mb-3 text-sm font-semibold text-text-primary">{t("dashboard.auditStream")}</h2>
 
       <div className="mb-2 flex gap-2">
-        <DownloadButton endpoint={`${API_V1}/audit-logs/export?format=csv`} format="csv" filename="audit-log.csv" label="Export CSV" size="sm" />
-        <DownloadButton endpoint={`${API_V1}/audit-logs/export?format=json`} format="json" filename="audit-log.json" label="Export JSON" size="sm" />
+        <DownloadButton endpoint={`${API_V1}/audit-logs/export?format=csv`} format="csv" filename="audit-log.csv" label={t("audit.exportCsv")} size="sm" />
+        <DownloadButton endpoint={`${API_V1}/audit-logs/export?format=json`} format="json" filename="audit-log.json" label={t("audit.exportJson")} size="sm" />
       </div>
 
       {!hasToken ? (
-        <EmptyState message="Connect with a dev token to view the audit trail." />
+        <EmptyState message={t("audit.connectPrompt")} />
       ) : isLoading ? (
-        <EmptyState message="Loading recent activity…" />
+        <EmptyState message={t("audit.loading")} />
       ) : forbidden ? (
-        <EmptyState message="This account's role doesn't have audit-log access (Admin or Auditor only)." />
+        <EmptyState message={t("audit.forbidden")} />
       ) : isError ? (
-        <EmptyState message="Could not reach the audit log API." tone="danger" />
+        <EmptyState message={t("audit.apiError")} tone="danger" />
       ) : !data || data.entries.length === 0 ? (
-        <EmptyState message="No audit activity recorded yet for this organization." />
+        <EmptyState message={t("audit.empty")} />
       ) : (
         <ul className="flex-1 space-y-2 overflow-auto">
           {data.entries.map((entry) => (

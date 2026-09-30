@@ -16,6 +16,7 @@ import { useState } from "react";
 import { useHealth } from "../api/hooks";
 import type { AgentHealthEntry } from "../api/client";
 import { EmptyState } from "./EmptyState";
+import { useI18n } from "../i18n";
 
 /** An agent worth a row on its own: refusing work, degraded, or backed up. */
 function needsAttention(agent: AgentHealthEntry): boolean {
@@ -44,6 +45,7 @@ export function AgentHealth() {
   const { data, isLoading, isError } = useHealth();
   const [showAll, setShowAll] = useState(false);
   const report = data?.agent_health;
+  const { t } = useI18n();
 
   const agents = report?.agents ?? [];
   const visible = showAll ? [...agents].sort(bySeverity) : agents.filter(needsAttention).sort(bySeverity);
@@ -52,27 +54,27 @@ export function AgentHealth() {
   return (
     <section className="flex max-h-[46%] flex-shrink-0 flex-col rounded-lg border border-border-soft bg-surface p-4">
       <div className="mb-2 flex items-baseline justify-between gap-2">
-        <h2 className="text-sm font-semibold text-text-primary">Agent Health</h2>
+        <h2 className="text-sm font-semibold text-text-primary">{t("dashboard.agentHealth")}</h2>
         {report && (
           <span className="text-right text-[11px] text-text-secondary">
-            {report.totals.agents} agents · {report.totals.circuits_open} open · {report.totals.queued} queued
+            {t("agent.summary", { agents: report.totals.agents, open: report.totals.circuits_open, queued: report.totals.queued })}
           </span>
         )}
       </div>
 
       {isLoading ? (
-        <EmptyState message="Loading agent runtime status…" />
+        <EmptyState message={t("agent.loading")} />
       ) : isError ? (
-        <EmptyState message="Could not reach the /health endpoint." tone="danger" />
+        <EmptyState message={t("agent.apiError")} tone="danger" />
       ) : !report ? (
-        <EmptyState message="This API build does not report per-agent health yet." />
+        <EmptyState message={t("agent.noReport")} />
       ) : agents.length === 0 ? (
-        <EmptyState message="No agents registered in this process yet." />
+        <EmptyState message={t("agent.noneRegistered")} />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
           {!showAll && visible.length === 0 && (
             <p className="rounded-md border border-dashed border-border-soft px-3 py-2 text-xs text-success">
-              All {report.totals.agents} agents healthy — no circuit open, no queue backlog.
+              {t("agent.allHealthy", { count: report.totals.agents })}
             </p>
           )}
 
@@ -88,10 +90,10 @@ export function AgentHealth() {
             onClick={() => setShowAll((current) => !current)}
             className="mt-2 self-start text-[11px] text-agent hover:underline"
           >
-            {showAll ? `Show only agents needing attention (${agents.filter(needsAttention).length})` : `Show all ${agents.length} agents`}
+            {showAll ? t("agent.showOnlyAttention", { count: agents.filter(needsAttention).length }) : t("agent.showAll", { count: agents.length })}
           </button>
           {!showAll && hiddenCount > 0 && visible.length > 0 && (
-            <p className="mt-1 text-[11px] text-text-secondary">{hiddenCount} healthy or idle agent(s) hidden.</p>
+            <p className="mt-1 text-[11px] text-text-secondary">{t("agent.hiddenCount", { count: hiddenCount })}</p>
           )}
         </div>
       )}
@@ -100,6 +102,7 @@ export function AgentHealth() {
 }
 
 function AgentRow({ agent }: { agent: AgentHealthEntry }) {
+  const { t } = useI18n();
   return (
     <li className="rounded-md border border-border-soft p-2 text-xs">
       <div className="flex items-center justify-between gap-2">
@@ -113,11 +116,11 @@ function AgentRow({ agent }: { agent: AgentHealthEntry }) {
         </span>
       </div>
       <div className="mt-1 text-text-secondary">
-        last ok {formatTime(agent.last_success_at)} · last fail {formatTime(agent.last_failure_at)} · queue {agent.queue_depth}/
+        {t("agent.lastOk")} {formatTime(agent.last_success_at)} · {t("agent.lastFail")} {formatTime(agent.last_failure_at)} · {t("agent.queue")} {agent.queue_depth}/
         {agent.pool_size}
       </div>
       <div className="mt-0.5 text-[11px] text-text-secondary">
-        {agent.invocations} calls · {agent.failures} failed · {agent.retries} retried · {agent.timeouts} timed out
+        {t("agent.stats", { calls: agent.invocations, failed: agent.failures, retried: agent.retries, timedOut: agent.timeouts })}
       </div>
       {agent.last_error && (
         <div className="mt-1 truncate text-danger" title={agent.last_error}>

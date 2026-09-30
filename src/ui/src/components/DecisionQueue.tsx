@@ -13,17 +13,18 @@ import { getIcon } from "./navigation/iconRegistry";
 import { Icon } from "./navigation/Icon";
 import { ReasonCode } from "./ReasonCode";
 import { DecisionQueueSkeleton } from "./Skeleton";
+import { useI18n } from "../i18n";
 
 // ─── Filter chip categories ──────────────────────────────────────────
 type FilterCategory = "all" | "auto_fail" | "borderline" | "ocr_issue" | "verification" | "age";
 
-const FILTER_CHIPS: { key: FilterCategory; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "auto_fail", label: "Auto-Fail" },
-  { key: "borderline", label: "Borderline" },
-  { key: "ocr_issue", label: "OCR Issue" },
-  { key: "verification", label: "Verification Issue" },
-  { key: "age", label: "Stale (>24h)" },
+const FILTER_CHIPS: { key: FilterCategory; labelKey: string }[] = [
+  { key: "all", labelKey: "queue.filterAll" },
+  { key: "auto_fail", labelKey: "queue.filter.auto_fail" },
+  { key: "borderline", labelKey: "queue.filter.borderline" },
+  { key: "ocr_issue", labelKey: "queue.filter.ocr_issue" },
+  { key: "verification", labelKey: "queue.filter.verification" },
+  { key: "age", labelKey: "queue.filter.age" },
 ];
 
 function categorize(c: CandidateSummary): FilterCategory[] {
@@ -40,11 +41,11 @@ function categorize(c: CandidateSummary): FilterCategory[] {
 
 function recommendedAction(c: CandidateSummary): string {
   const rc = (c.reason_code ?? "").toUpperCase();
-  if (rc.includes("OCR") || rc.includes("PARSE")) return "Request clearer scan";
-  if (rc.includes("VERIFY") || rc.includes("DOCUMENT")) return "Verify documents";
-  if (rc.includes("FAIL") || rc.includes("INELIGIBLE")) return "Review eligibility";
-  if (c.distance_to_threshold != null && Math.abs(c.distance_to_threshold) < 0.1) return "Borderline — manual call";
-  return "Review & decide";
+  if (rc.includes("OCR") || rc.includes("PARSE")) return "queue.action.requestClearerScan";
+  if (rc.includes("VERIFY") || rc.includes("DOCUMENT")) return "queue.action.verifyDocuments";
+  if (rc.includes("FAIL") || rc.includes("INELIGIBLE")) return "queue.action.reviewEligibility";
+  if (c.distance_to_threshold != null && Math.abs(c.distance_to_threshold) < 0.1) return "queue.action.borderlineManual";
+  return "queue.action.reviewDecide";
 }
 
 function timeInQueue(updatedAt: string): string {
@@ -61,6 +62,7 @@ function timeInQueue(updatedAt: string): string {
 export function DecisionQueue() {
   const { data, isLoading, isError } = useNeedsReviewQueue();
   const hasToken = !!getToken();
+  const { t } = useI18n();
 
   const [activeFilter, setActiveFilter] = useState<FilterCategory>("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -115,10 +117,10 @@ export function DecisionQueue() {
     <div className="flex h-full flex-col rounded-lg border border-border-soft bg-surface p-4">
       {/* Header */}
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-text-primary">Decision Queue</h2>
+        <h2 className="text-sm font-semibold text-text-primary">{t("dashboard.decisionQueue")}</h2>
         {data && (
           <span className="text-xs text-text-secondary">
-            {data.count} needing review
+            {data.count} {t("queue.needingReview")}
           </span>
         )}
       </div>
@@ -126,7 +128,7 @@ export function DecisionQueue() {
       {/* Filter chips */}
       {candidates.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-2">
-          {FILTER_CHIPS.map(({ key, label }) => (
+          {FILTER_CHIPS.map(({ key, labelKey }) => (
             <button
               key={key}
               onClick={() => setActiveFilter(key)}
@@ -136,7 +138,7 @@ export function DecisionQueue() {
                   : "bg-background text-text-secondary hover:bg-border-soft"
               }`}
             >
-              {label}
+              {t(labelKey)}
               {key !== "all" && filterCounts[key] > 0 && (
                 <span className="ml-1 opacity-70">({filterCounts[key]})</span>
               )}
@@ -148,41 +150,41 @@ export function DecisionQueue() {
       {/* Batch action bar */}
       {selected.size > 0 && (
         <div className="mb-3 flex items-center gap-3 rounded-md bg-agent/5 px-3 py-2 text-sm">
-          <span className="font-medium text-agent">{selected.size} selected</span>
+          <span className="font-medium text-agent">{t("queue.selected", { count: selected.size })}</span>
           <div className="flex gap-2">
             <button className="rounded bg-success px-2 py-1 text-xs text-white hover:bg-success/80">
-              Approve
+              {t("queue.approve")}
             </button>
             <button className="rounded bg-danger px-2 py-1 text-xs text-white hover:bg-danger/80">
-              Reject
+              {t("queue.reject")}
             </button>
             <button className="rounded bg-attention px-2 py-1 text-xs text-white hover:bg-attention/80">
-              Request Docs
+              {t("queue.requestDocs")}
             </button>
           </div>
           <button
             onClick={() => setSelected(new Set())}
             className="ml-auto text-xs text-text-secondary hover:text-text-primary"
           >
-            Clear
+            {t("queue.clear")}
           </button>
         </div>
       )}
 
       {/* Content */}
       {!hasToken ? (
-        <EmptyState message="Connect with a dev token to load the decision queue." />
+        <EmptyState message={t("queue.connectPrompt")} />
       ) : isLoading ? (
         <DecisionQueueSkeleton />
       ) : isError ? (
-        <EmptyState message="Could not reach the candidates API. Check the token and API origin." tone="danger" />
+        <EmptyState message={t("queue.apiError")} tone="danger" />
       ) : candidates.length === 0 ? (
         <EmptyState
-          message={`All clear — no candidates currently need human review. ${processedLastHour} candidates processed in the last hour.`}
+          message={t("queue.emptyClear", { count: processedLastHour })}
           tone="success"
         />
       ) : filtered.length === 0 ? (
-        <EmptyState message={`No candidates match the "${activeFilter}" filter.`} tone="neutral" />
+        <EmptyState message={t("queue.emptyFilter", { filter: activeFilter })} tone="neutral" />
       ) : (
         <div className="flex-1 overflow-auto">
           <table className="w-full text-left text-sm">
@@ -196,12 +198,12 @@ export function DecisionQueue() {
                     className="rounded border-border-soft"
                   />
                 </th>
-                <th className="py-2 pr-3">Candidate</th>
-                <th className="py-2 pr-3">Reason Code</th>
-                <th className="py-2 pr-3">Evidence</th>
-                <th className="py-2 pr-3">Action</th>
-                <th className="py-2 pr-3">Queue Time</th>
-                <th className="py-2">Confidence</th>
+                <th className="py-2 pr-3">{t("queue.col.candidate")}</th>
+                <th className="py-2 pr-3">{t("queue.col.reasonCode")}</th>
+                <th className="py-2 pr-3">{t("queue.col.evidence")}</th>
+                <th className="py-2 pr-3">{t("queue.col.action")}</th>
+                <th className="py-2 pr-3">{t("queue.col.queueTime")}</th>
+                <th className="py-2">{t("queue.col.confidence")}</th>
               </tr>
             </thead>
             <tbody>
@@ -237,6 +239,7 @@ function CandidateRow({
   onToggleSelect: () => void;
   onToggleExpand: () => void;
 }) {
+  const { t } = useI18n();
   const evidenceSnippet = c.input_value
     ? JSON.stringify(c.input_value).slice(0, 80)
     : "—";
@@ -277,7 +280,7 @@ function CandidateRow({
           </span>
         </td>
         <td className="py-2 pr-3 text-xs text-agent font-medium">
-          {recommendedAction(c)}
+          {t(recommendedAction(c))}
         </td>
         <td className="py-2 pr-3 text-xs text-text-secondary">
           {timeInQueue(c.updated_at)}
@@ -291,41 +294,41 @@ function CandidateRow({
           <td colSpan={7} className="px-4 py-3">
             <div className="grid grid-cols-2 gap-4 text-xs">
               <div>
-                <span className="font-semibold text-text-primary">Full ID:</span>{" "}
+                <span className="font-semibold text-text-primary">{t("queue.detail.fullId")}</span>{" "}
                 <span className="font-mono text-text-secondary">{c.candidate_id}</span>
               </div>
               <div>
-                <span className="font-semibold text-text-primary">Source:</span>{" "}
+                <span className="font-semibold text-text-primary">{t("queue.detail.source")}</span>{" "}
                 <span className="text-text-secondary">{c.source_platform ?? "—"}</span>
               </div>
               <div>
-                <span className="font-semibold text-text-primary">Position:</span>{" "}
+                <span className="font-semibold text-text-primary">{t("queue.detail.position")}</span>{" "}
                 <span className="text-text-secondary">{c.position_applied ?? "—"}</span>
               </div>
               <div>
-                <span className="font-semibold text-text-primary">Circular:</span>{" "}
+                <span className="font-semibold text-text-primary">{t("queue.detail.circular")}</span>{" "}
                 <span className="text-text-secondary">{c.job_circular_id ?? "—"}</span>
               </div>
               {c.reason_code && (
                 <div>
-                  <span className="font-semibold text-text-primary">Reason:</span>{" "}
+                  <span className="font-semibold text-text-primary">{t("queue.detail.reason")}</span>{" "}
                   <ReasonCode code={c.reason_code} size="sm" />
                 </div>
               )}
               {c.eval_confidence != null && (
                 <div>
-                  <span className="font-semibold text-text-primary">Eval Confidence:</span>{" "}
+                  <span className="font-semibold text-text-primary">{t("queue.detail.evalConfidence")}</span>{" "}
                   <span className="text-text-secondary">{(c.eval_confidence * 100).toFixed(0)}%</span>
                 </div>
               )}
               {c.distance_to_threshold != null && (
                 <div>
-                  <span className="font-semibold text-text-primary">Distance to Threshold:</span>{" "}
+                  <span className="font-semibold text-text-primary">{t("queue.detail.distanceThreshold")}</span>{" "}
                   <span className="text-text-secondary">{c.distance_to_threshold.toFixed(3)}</span>
                 </div>
               )}
               <div>
-                <span className="font-semibold text-text-primary">Updated:</span>{" "}
+                <span className="font-semibold text-text-primary">{t("queue.detail.updated")}</span>{" "}
                 <span className="text-text-secondary">{new Date(c.updated_at).toLocaleString()}</span>
               </div>
             </div>
@@ -336,7 +339,7 @@ function CandidateRow({
               }}
               className="mt-3 rounded bg-agent px-3 py-1 text-xs text-white hover:bg-agent/80"
             >
-              View full profile →
+              {t("queue.viewProfile")}
             </button>
           </td>
         </tr>
@@ -349,9 +352,10 @@ function CandidateRow({
 // ReasonBadge replaced by shared ReasonCode component (Quest 05 Part 9)
 
 function ConfidenceBadge({ confidence }: { confidence: string | null }) {
+  const { t } = useI18n();
   const color =
     confidence === "Low" ? "text-attention" : confidence === "Medium" ? "text-text-secondary" : "text-agent";
-  return <span className={`text-xs font-medium ${color}`}>{confidence ?? "Unknown"}</span>;
+  return <span className={`text-xs font-medium ${color}`}>{confidence ?? t("queue.unknown")}</span>;
 }
 
 function EmptyState({ message, tone = "neutral" }: { message: string; tone?: "neutral" | "danger" | "success" }) {

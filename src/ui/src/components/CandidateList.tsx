@@ -9,6 +9,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchCandidateList, getToken, API_V1, type CandidateListParams } from "../api/client";
 import { DownloadButton } from "./DownloadButton";
+import { useI18n } from "../i18n";
 
 const STATUSES = [
   "", "INTAKE", "PARSED", "ELIGIBILITY_DONE", "NEEDS_REVIEW", "SCORED",
@@ -23,6 +24,7 @@ interface Props {
 
 export function CandidateList({ onInspect }: Props) {
   const hasToken = !!getToken();
+  const { t } = useI18n();
 
   // Parse hash params: #/candidates?status=NEEDS_REVIEW&circular_id=...
   const hashParams = useMemo(() => {
@@ -107,33 +109,33 @@ export function CandidateList({ onInspect }: Props) {
     <div className="flex h-full flex-col rounded-lg border border-border-soft bg-surface">
       {/* Filters bar */}
       <div className="flex flex-wrap items-center gap-3 border-b border-border-soft p-3">
-        <h2 className="text-sm font-semibold text-text-primary">Candidates</h2>
-
+        <h2 className="text-sm font-semibold text-text-primary">{t("candidates.title")}</h2>
+      
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className="rounded border border-border-soft bg-background px-2 py-1 text-xs text-text-primary"
         >
-          <option value="">All statuses</option>
+          <option value="">{t("candidates.allStatuses")}</option>
           {STATUSES.filter(Boolean).map((s) => (
             <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
           ))}
         </select>
-
+      
         <select
           value={sourceFilter}
           onChange={(e) => setSourceFilter(e.target.value)}
           className="rounded border border-border-soft bg-background px-2 py-1 text-xs text-text-primary"
         >
-          <option value="">All sources</option>
+          <option value="">{t("candidates.allSources")}</option>
           {SOURCES.filter(Boolean).map((s) => (
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
-
+      
         <input
           type="text"
-          placeholder="Search name or ID…"
+          placeholder={t("candidates.search")}
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
           className="w-48 rounded border border-border-soft bg-background px-2 py-1 text-xs text-text-primary placeholder:text-text-secondary"
@@ -141,14 +143,14 @@ export function CandidateList({ onInspect }: Props) {
 
         {selected.size > 0 && (
           <div className="ml-auto flex items-center gap-2">
-            <span className="text-xs text-text-secondary">{selected.size} selected</span>
+            <span className="text-xs text-text-secondary">{t("candidates.selectedCount", { count: selected.size })}</span>
             <DownloadButton
               endpoint={`${API_V1}/candidates/export-bulk`}
               method="POST"
               body={{ candidate_ids: Array.from(selected), format: "csv" }}
               format="csv"
               filename="candidates-export.csv"
-              label="Export CSV"
+              label={t("candidates.exportCsv")}
               size="sm"
               variant="primary"
             />
@@ -158,13 +160,13 @@ export function CandidateList({ onInspect }: Props) {
 
       {/* Content */}
       {!hasToken ? (
-        <EmptyState message="Sign in to view candidates." />
+        <EmptyState message={t("candidates.signInPrompt")} />
       ) : isLoading ? (
-        <EmptyState message="Loading candidates…" />
+        <EmptyState message={t("candidates.loadingCandidates")} />
       ) : isError ? (
-        <EmptyState message="Could not load candidates. Check your connection." tone="danger" />
+        <EmptyState message={t("candidates.loadError")} tone="danger" />
       ) : filtered.length === 0 ? (
-        <EmptyState message="No candidates match the current filters." />
+        <EmptyState message={t("candidates.noMatch")} />
       ) : (
         <>
           <div className="flex-1 overflow-auto">
@@ -179,12 +181,12 @@ export function CandidateList({ onInspect }: Props) {
                       className="rounded border-border-soft"
                     />
                   </th>
-                  <SortHeader label="Candidate" field="full_name" current={sortField} dir={sortDir} onToggle={toggleSort} />
-                  <SortHeader label="Status" field="status" current={sortField} dir={sortDir} onToggle={toggleSort} />
-                  <th className="py-2 pr-3">Source</th>
-                  <th className="py-2 pr-3">Circular</th>
-                  <th className="py-2 pr-3">Confidence</th>
-                  <SortHeader label="Created" field="created_at" current={sortField} dir={sortDir} onToggle={toggleSort} />
+                  <SortHeader label={t("queue.col.candidate")} field="full_name" current={sortField} dir={sortDir} onToggle={toggleSort} />
+                  <SortHeader label={t("candidates.status")} field="status" current={sortField} dir={sortDir} onToggle={toggleSort} />
+                  <th className="py-2 pr-3">{t("candidates.col.source")}</th>
+                  <th className="py-2 pr-3">{t("candidates.col.circular")}</th>
+                  <th className="py-2 pr-3">{t("queue.col.confidence")}</th>
+                  <SortHeader label={t("candidates.col.created")} field="created_at" current={sortField} dir={sortDir} onToggle={toggleSort} />
                 </tr>
               </thead>
               <tbody>
@@ -225,22 +227,22 @@ export function CandidateList({ onInspect }: Props) {
 
           {/* Pagination */}
           <div className="flex items-center justify-between border-t border-border-soft px-3 py-2 text-xs text-text-secondary">
-            <span>{totalCount} candidate{totalCount !== 1 ? "s" : ""} total</span>
+            <span>{t("candidates.total", { count: totalCount })}</span>
             <div className="flex items-center gap-2">
               <button
                 disabled={page === 0}
                 onClick={() => setPage((p) => p - 1)}
                 className="rounded border border-border-soft px-2 py-1 disabled:opacity-40"
               >
-                ← Prev
+                {t("candidates.prev")}
               </button>
-              <span>Page {page + 1} of {Math.max(1, totalPages)}</span>
+              <span>{t("candidates.page", { page: page + 1, total: Math.max(1, totalPages) })}</span>
               <button
                 disabled={page >= totalPages - 1}
                 onClick={() => setPage((p) => p + 1)}
                 className="rounded border border-border-soft px-2 py-1 disabled:opacity-40"
               >
-                Next →
+                {t("candidates.next")}
               </button>
             </div>
           </div>

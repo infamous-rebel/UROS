@@ -3,6 +3,7 @@ import { usePendingGates, useResolveGate } from "../hooks/hooks_gates";
 import { getToken, type GateSummary } from "../api/client";
 import { getIcon } from "./navigation/iconRegistry";
 import { Icon } from "./navigation/Icon";
+import { useI18n } from "../i18n";
 
 const GATE_TIMEOUT_MS = 1000 * 60 * 60 * 24 * 30; // 30 days — matches env.schema.ts
 
@@ -36,6 +37,7 @@ export function HilGateInbox() {
   const { data, isLoading, isError } = usePendingGates();
   const resolveMutation = useResolveGate();
   const hasToken = !!getToken();
+  const { t } = useI18n();
 
   const gates = data?.gates ?? [];
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
@@ -337,11 +339,11 @@ export function HilGateInbox() {
 
       {/* Keyboard hint */}
       <div className="mt-2 flex gap-3 text-xs text-text-secondary/60">
-        <span>↑↓ navigate</span>
-        <span>Enter expand</span>
-        <span>A approve</span>
-        <span>R reject</span>
-        <span>Esc close</span>
+        <span>\u2191\u2193 navigate</span>
+        <span>{t("hil.enter")}</span>
+        <span>{t("hil.a")}</span>
+        <span>{t("hil.r")}</span>
+        <span>{t("hil.esc")}</span>
       </div>
     </div>
   );

@@ -8,26 +8,28 @@ import { usePipelineStageCounts } from "../api/hooks";
 import { PIPELINE_STAGE_STATUSES } from "../api/client";
 import { getToken } from "../api/client";
 import { PipelineSkeleton } from "./Skeleton";
+import { useI18n } from "../i18n";
 
-const STAGE_LABELS: Record<string, string> = {
-  INTAKE: "Intake",
-  PARSED: "Parsed",
-  ELIGIBILITY_DONE: "Eligibility",
-  NEEDS_REVIEW: "Needs Review",
-  SCORED: "Scored",
-  SHORTLISTED: "Shortlisted",
-  VERIFIED: "Verified",
-  SELECTED: "Selected",
+const STAGE_LABEL_KEYS: Record<string, string> = {
+  INTAKE: "pipeline.stage.INTAKE",
+  PARSED: "pipeline.stage.PARSED",
+  ELIGIBILITY_DONE: "pipeline.stage.ELIGIBILITY_DONE",
+  NEEDS_REVIEW: "pipeline.stage.NEEDS_REVIEW",
+  SCORED: "pipeline.stage.SCORED",
+  SHORTLISTED: "pipeline.stage.SHORTLISTED",
+  VERIFIED: "pipeline.stage.VERIFIED",
+  SELECTED: "pipeline.stage.SELECTED",
 };
 
 export function PipelineStrip() {
   const results = usePipelineStageCounts();
   const hasToken = !!getToken();
+  const { t } = useI18n();
 
   if (!hasToken) {
     return (
       <div className="rounded-lg border border-border-soft bg-surface p-4 text-sm text-text-secondary">
-        Pipeline stages will appear here once you sign in.
+        {t("pipeline.signInPrompt")}
       </div>
     );
   }
@@ -44,7 +46,7 @@ export function PipelineStrip() {
   return (
     <div className="rounded-lg border border-border-soft bg-surface p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-text-primary">Live Pipeline</h2>
+        <h2 className="text-sm font-semibold text-text-primary">{t("dashboard.pipeline")}</h2>
         {anyLoading && !anyLoaded && <PipelineSkeleton />}
       </div>
       <div className="grid grid-cols-4 gap-3 md:grid-cols-8">
@@ -79,13 +81,13 @@ export function PipelineStrip() {
               >
                 {result.isError ? "—" : count}
               </span>
-              <span className="mt-1 text-center text-xs text-text-secondary">{STAGE_LABELS[status]}</span>
+              <span className="mt-1 text-center text-xs text-text-secondary">{t(STAGE_LABEL_KEYS[status])}</span>
             </button>
           );
         })}
       </div>
       <p className="mt-3 text-xs text-text-secondary">
-        Click a stage to view candidates. Counts refresh automatically.
+        {t("pipeline.stageHint")}
       </p>
     </div>
   );

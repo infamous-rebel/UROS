@@ -29,6 +29,7 @@ import { DownloadButton } from "./DownloadButton";
 import { getIcon } from "./navigation/iconRegistry";
 import { Icon } from "./navigation/Icon";
 import { ReasonCode } from "./ReasonCode";
+import { useI18n } from "../i18n";
 
 interface Props {
   candidateId: string;
@@ -207,6 +208,7 @@ function EvaluationsTab({ evaluations, onShowEvidence }: {
   evaluations: CandidateDetail["evaluation_summary"];
   onShowEvidence: (ev: CandidateDetail["evaluation_summary"][number]) => void;
 }) {
+  const { t } = useI18n();
   if (evaluations.length === 0) {
     return <p className="text-sm text-text-secondary">No evaluation results recorded yet.</p>;
   }
@@ -229,11 +231,11 @@ function EvaluationsTab({ evaluations, onShowEvidence }: {
             <ReasonCode code={ev.reason_code} size="sm" />
           </div>
           <div className="mt-1 flex gap-3 text-xs text-text-secondary">
-            {ev.confidence != null && <span>Confidence: {(Number(ev.confidence) * 100).toFixed(0)}%</span>}
+            {ev.confidence != null && <span>{t("inspector.confidence")} {(Number(ev.confidence) * 100).toFixed(0)}%</span>}
             {ev.distance_to_threshold != null && (
-              <span>Distance to threshold: {Number(ev.distance_to_threshold) > 0 ? "+" : ""}{Number(ev.distance_to_threshold).toFixed(2)}</span>
+              <span>{t("inspector.distanceThreshold")} {Number(ev.distance_to_threshold) > 0 ? "+" : ""}{Number(ev.distance_to_threshold).toFixed(2)}</span>
             )}
-            {ev.human_decision && <span>Human: {ev.human_decision}</span>}
+            {ev.human_decision && <span>{t("inspector.human")} {ev.human_decision}</span>}
           </div>
           {ev.input_value != null && (
             <details className="mt-2">
@@ -285,6 +287,7 @@ function ScoringTab({ scoring }: { scoring: CandidateDetail["scoring"] | null })
 function VerificationTab({ verifications }: {
   verifications: CandidateDetail["verification_results"];
 }) {
+  const { t } = useI18n();
   if (verifications.length === 0) {
     return <p className="text-sm text-text-secondary">No verification results recorded yet.</p>;
   }
@@ -307,8 +310,8 @@ function VerificationTab({ verifications }: {
             </span>
           </div>
           <div className="mt-1 flex gap-3 text-xs text-text-secondary">
-            <span>Checked: {new Date(v.checked_at).toLocaleString()}</span>
-            {v.signed_off_by && <span>Signed off by: {v.signed_off_by.slice(0, 8)}…</span>}
+            <span>{t("inspector.checked")} {new Date(v.checked_at).toLocaleString()}</span>
+            {v.signed_off_by && <span>{t("inspector.signedOffBy")} {v.signed_off_by.slice(0, 8)}\u2026</span>}
           </div>
           {v.details != null && (
             <details className="mt-2">
@@ -460,10 +463,11 @@ function FraudTab({ detail }: { detail: CandidateDetail | undefined }) {
 }
 
 function ReferencesTab({ detail }: { detail: CandidateDetail | undefined }) {
+  const { t } = useI18n();
   // Reference data would come from a separate API; for now show placeholder
   return (
     <div className="text-sm text-text-secondary">
-      <p>Reference check results will appear here once the reference check agent completes.</p>
+      <p>{t("inspector.referencePending")}</p>
       <p className="mt-2 text-xs">
         {detail?.documents?.length ?? 0} documents on file.
       </p>
@@ -512,6 +516,7 @@ function ActionsTab({
   setOverrideReason: (v: string) => void;
   statusMutation: { mutate: (args: { status: string; reason: string }) => void; isPending: boolean; isSuccess: boolean; isError: boolean };
 }) {
+  const { t } = useI18n();
   const STATUS_OPTIONS = [
     "ELIGIBILITY_DONE", "NEEDS_REVIEW", "SCORED", "SHORTLISTED",
     "VERIFIED", "REJECTED", "SELECTED", "WITHDRAWN",
@@ -548,7 +553,7 @@ function ActionsTab({
           onChange={(e) => setOverrideStatus(e.target.value)}
           className="w-full rounded border border-border-soft bg-background px-2 py-1.5 text-xs text-text-primary"
         >
-          <option value="">Select new status…</option>
+          <option value="">{t("inspector.selectNewStatus")}</option>
           {STATUS_OPTIONS.map((s) => (
             <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
           ))}

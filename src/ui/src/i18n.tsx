@@ -55,7 +55,7 @@ export interface I18nContextValue {
   language: SupportedLanguage;
   setLanguage: (lang: SupportedLanguage) => void;
   /** Translates `key`, optionally substituting `{{name}}` placeholders. Never throws — an unknown key renders as itself. */
-  t: (key: string, vars?: Record<string, string>) => string;
+  t: (key: string, vars?: Record<string, string | number>) => string;
 }
 
 const I18nContext = createContext<I18nContextValue | null>(null);
@@ -96,10 +96,10 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   );
 
   const t = useMemo(() => {
-    return (key: string, vars?: Record<string, string>): string => {
+    return (key: string, vars?: Record<string, string | number>): string => {
       const template = translations[key] ?? key;
       if (!vars) return template;
-      return Object.entries(vars).reduce((acc, [name, value]) => acc.split(`{{${name}}}`).join(value), template);
+      return Object.entries(vars).reduce((acc, [name, value]) => acc.split(`{{${name}}}`).join(String(value)), template);
     };
   }, [translations]);
 

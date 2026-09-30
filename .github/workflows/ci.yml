@@ -138,3 +138,31 @@ jobs:
             exit 1
           fi
           echo "PASS: reason code translation map is populated"
+
+      - name: Guard — i18n key parity (en ↔ bn)
+        run: |
+          # Verify every key in en.json exists in bn.json and vice versa
+          node -e "
+            const en = Object.keys(JSON.parse(require('fs').readFileSync('src/ui/src/i18n/en.json','utf8')));
+            const bn = Object.keys(JSON.parse(require('fs').readFileSync('src/ui/src/i18n/bn.json','utf8')));
+            const missingInBn = en.filter(k => !bn.includes(k));
+            const missingInEn = bn.filter(k => !en.includes(k));
+            console.log('en keys:', en.length, 'bn keys:', bn.length);
+            if (missingInBn.length) { console.error('Missing in bn.json:', missingInBn); process.exit(1); }
+            if (missingInEn.length) { console.error('Missing in en.json:', missingInEn); process.exit(1); }
+            if (en.length < 100) { console.error('FAIL: fewer than 100 translation keys'); process.exit(1); }
+            console.log('PASS: i18n key parity perfect (' + en.length + ' keys)');
+          "
+
+      - name: Guard — no hardcoded English in major components
+        run: |
+          # Check that major dashboard components use t() for user-visible strings.
+          # We check that PipelineStrip, DecisionQueue, AgentHealth, AuditStream
+          # all import useI18n.
+          for f in PipelineStrip DecisionQueue AgentHealth AuditStream; do
+            if ! grep -q 'useI18n' "src/ui/src/components/${f}.tsx"; then
+              echo "FAIL: ${f}.tsx does not import useI18n"
+              exit 1
+            fi
+          done
+          echo "PASS: all major dashboard components use i18n"
