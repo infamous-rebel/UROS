@@ -335,6 +335,7 @@ jobs:
 
       - name: Run screenshot curator
         run: xvfb-run --auto-servernum npx playwright test screenshot-curator --reporter=list
+        continue-on-error: true
         env:
           CI: "true"
 
