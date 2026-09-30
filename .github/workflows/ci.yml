@@ -222,6 +222,7 @@ jobs:
       JWT_SECRET: ci-test-secret-must-be-at-least-32-characters-long
       ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
       NODE_ENV: test
+      VITE_API_ORIGIN: ""
 
     steps:
       - uses: actions/checkout@v4
@@ -297,6 +298,7 @@ jobs:
       JWT_SECRET: ci-test-secret-must-be-at-least-32-characters-long
       ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
       NODE_ENV: test
+      VITE_API_ORIGIN: ""
 
     steps:
       - uses: actions/checkout@v4
