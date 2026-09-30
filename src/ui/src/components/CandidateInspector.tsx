@@ -28,25 +28,14 @@ import {
 import { DownloadButton } from "./DownloadButton";
 import { getIcon } from "./navigation/iconRegistry";
 import { Icon } from "./navigation/Icon";
+import { ReasonCode } from "./ReasonCode";
 
 interface Props {
   candidateId: string;
   onClose: () => void;
 }
 
-/** Plain-language explanation of common reason codes. */
-const REASON_EXPLANATIONS: Record<string, string> = {
-  LOW_CONFIDENCE: "The system could not extract data from the candidate's documents with enough certainty.",
-  MISSING_DOCUMENT: "A required document (e.g. degree certificate, NID) was not provided.",
-  EXPERIENCE_MISMATCH: "The candidate's work experience does not meet the minimum required for this position.",
-  EDUCATION_MISMATCH: "The candidate's educational qualification does not match the requirement.",
-  AGE_OUT_OF_RANGE: "The candidate's age falls outside the acceptable range for this circular.",
-  DUPLICATE_CANDIDATE: "This candidate appears to have applied more than once.",
-  FRAUD_SUSPECTED: "Automated checks detected inconsistencies in the submitted documents.",
-  SCORE_BELOW_THRESHOLD: "The candidate's composite score is below the shortlisting threshold.",
-  MANUAL_OVERRIDE: "A human operator overrode the system's automated decision.",
-  VERIFICATION_FAILED: "External verification (e.g. university, employer) returned a negative result.",
-};
+/** Plain-language explanations moved to src/ui/src/lib/reasonCodes.ts (Quest 05 Part 9) */
 
 export function CandidateInspector({ candidateId, onClose }: Props) {
   const hasToken = !!getToken();
@@ -237,7 +226,7 @@ function EvaluationsTab({ evaluations, onShowEvidence }: {
             </span>
           </div>
           <div className="mt-2 text-xs text-text-secondary">
-            <ReasonCodeSentence code={ev.reason_code} />
+            <ReasonCode code={ev.reason_code} size="sm" />
           </div>
           <div className="mt-1 flex gap-3 text-xs text-text-secondary">
             {ev.confidence != null && <span>Confidence: {(Number(ev.confidence) * 100).toFixed(0)}%</span>}
@@ -369,9 +358,9 @@ function EvidencePanel({
     <div className="space-y-4">
       <button onClick={onBack} className="text-xs text-agent hover:underline">← Back to Evaluations</button>
 
-      <div className="text-xs font-semibold text-text-primary">Evidence: {evaluation.reason_code}</div>
+      <div className="text-xs font-semibold text-text-primary">Evidence</div>
       <div className="text-xs text-text-secondary">
-        <ReasonCodeSentence code={evaluation.reason_code} />
+        <ReasonCode code={evaluation.reason_code} size="sm" />
       </div>
 
       {/* Side-by-side: document | extracted data */}
@@ -497,7 +486,7 @@ function AuditTab({ entries }: { entries: AuditLogEntry[] }) {
           </div>
           <div className="mt-0.5 text-xs text-text-secondary">
             By: {e.agent_or_user}
-            {e.reason_code && ` · Reason: ${e.reason_code}`}
+            {e.reason_code && <ReasonCode code={e.reason_code} size="sm" />}
           </div>
           {e.reason_comment && (
             <div className="mt-1 text-xs text-text-secondary italic">"{e.reason_comment}"</div>
@@ -587,20 +576,4 @@ function ActionsTab({
 
 // ─── Shared ──────────────────────────────────────────────────────────
 
-function ReasonCodeSentence({ code }: { code: string }) {
-  const explanation = REASON_EXPLANATIONS[code];
-  if (!explanation) {
-    return <span className="text-text-secondary">{code}</span>;
-  }
-  return (
-    <span>
-      <span className="text-text-primary">{explanation}</span>
-      <details className="ml-2 inline">
-        <summary className="cursor-pointer text-agent">Why?</summary>
-        <span className="ml-1 text-text-secondary">
-          Rule code: <code className="rounded bg-background px-1">{code}</code>
-        </span>
-      </details>
-    </span>
-  );
-}
+// ReasonCodeSentence replaced by shared ReasonCode component (Quest 05 Part 9)

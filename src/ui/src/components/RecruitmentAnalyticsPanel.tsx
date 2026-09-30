@@ -16,6 +16,7 @@ import {
 import { getToken, API_V1 } from "../api/client";
 import { EmptyState } from "./EmptyState";
 import { DownloadButton } from "./DownloadButton";
+import { ReasonCode } from "./ReasonCode";
 
 const FUNNEL_STAGE_LABEL: Record<FunnelStage["stage"], string> = {
   APPLIED: "Applied",
@@ -40,7 +41,7 @@ function FlagsList({ flags }: { flags: UnderperformanceFlag[] }) {
         <div key={`${f.source_platform}-${f.reason_code}-${i}`} className="rounded-md border border-attention bg-surface p-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-text-primary">{f.source_platform}</span>
-            <span className="rounded bg-attention px-1.5 py-0.5 text-[10px] font-medium text-white">{f.reason_code}</span>
+            <span className="rounded bg-attention px-1.5 py-0.5 text-[10px] font-medium text-white"><ReasonCode code={f.reason_code} size="sm" /></span>
           </div>
           <div className="mt-1 text-xs text-text-primary">{f.reason_description}</div>
           <details className="mt-1">

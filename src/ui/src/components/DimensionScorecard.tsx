@@ -9,6 +9,7 @@ import { getToken } from "../api/client";
 import { EmptyState } from "./EmptyState";
 import { getIcon } from "./navigation/iconRegistry";
 import { Icon } from "./navigation/Icon";
+import { ReasonCode } from "./ReasonCode";
 
 const DECISION_COLOR: Record<string, string> = {
   AUTO_PASS: "text-success",
@@ -92,7 +93,7 @@ function DimensionRow({ dim }: { dim: DimensionBreakdownEntry }) {
                     ) : s.matched ? (
                       <span className="text-success">MATCH</span>
                     ) : (
-                      <span className="text-danger">{s.reason_code}</span>
+                      <ReasonCode code={s.reason_code} size="sm" />
                     )}
                   </td>
                   <td className="py-1 text-text-primary">{s.points_earned}</td>

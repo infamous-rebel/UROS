@@ -36,6 +36,7 @@ import { ChangePasswordScreen } from "./components/auth/ChangePasswordScreen";
 import { SessionManager } from "./components/auth/SessionManager";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { I18nProvider, useI18n } from "./i18n";
+import { ToastProvider } from "./components/Toast";
 import { Sidebar } from "./components/navigation/Sidebar";
 import { Breadcrumb } from "./components/navigation/Breadcrumb";
 import { CommandPalette } from "./components/navigation/CommandPalette";
@@ -79,7 +80,9 @@ export function App() {
   return (
     <I18nProvider>
       <AuthProvider>
-        <AppBody />
+        <ToastProvider>
+          <AppBody />
+        </ToastProvider>
       </AuthProvider>
     </I18nProvider>
   );

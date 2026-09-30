@@ -16,6 +16,7 @@ import { useState, useEffect, useCallback } from "react";
 import { API_V1, authedRequest } from "../api/client";
 import { getIcon } from "./navigation/iconRegistry";
 import { Icon } from "./navigation/Icon";
+import { ReasonCode } from "./ReasonCode";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -532,7 +533,7 @@ function RuleCard({ rule, onToggle, onDelete, onClone }: {
       {expanded && (
         <div className="mt-2 rounded bg-background p-2 text-xs text-text-secondary">
           <p><strong>Rule Code:</strong> {rule.rule_code}</p>
-          <p><strong>Fail Reason:</strong> {rule.fail_reason_code}</p>
+          <p><strong>Fail Reason:</strong> <ReasonCode code={rule.fail_reason_code} size="sm" /></p>
           <p><strong>Min Confidence:</strong> {rule.min_confidence_threshold}</p>
           {rule.review_margin != null && <p><strong>Review Margin:</strong> ±{rule.review_margin}</p>}
           <p className="mt-1">
@@ -980,7 +981,7 @@ function SimulationPanel({ packId, versionId, onClose }: {
                       </span>
                       <span className="text-text-secondary">{rr.rule_code}</span>
                       <span className="text-text-secondary/60">
-                        {rr.field_path}={JSON.stringify(rr.input_value)} → {rr.reason_code}
+                        {rr.field_path}={JSON.stringify(rr.input_value)} → <ReasonCode code={rr.reason_code} size="sm" />
                       </span>
                     </div>
                   ))}

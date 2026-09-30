@@ -11,6 +11,8 @@ import { useNeedsReviewQueue } from "../api/hooks";
 import { getToken, type CandidateSummary } from "../api/client";
 import { getIcon } from "./navigation/iconRegistry";
 import { Icon } from "./navigation/Icon";
+import { ReasonCode } from "./ReasonCode";
+import { DecisionQueueSkeleton } from "./Skeleton";
 
 // ─── Filter chip categories ──────────────────────────────────────────
 type FilterCategory = "all" | "auto_fail" | "borderline" | "ocr_issue" | "verification" | "age";
@@ -171,7 +173,7 @@ export function DecisionQueue() {
       {!hasToken ? (
         <EmptyState message="Connect with a dev token to load the decision queue." />
       ) : isLoading ? (
-        <EmptyState message="Loading candidates needing review…" />
+        <DecisionQueueSkeleton />
       ) : isError ? (
         <EmptyState message="Could not reach the candidates API. Check the token and API origin." tone="danger" />
       ) : candidates.length === 0 ? (
@@ -267,7 +269,7 @@ function CandidateRow({
           </div>
         </td>
         <td className="py-2 pr-3">
-          <ReasonBadge code={c.reason_code} />
+          <ReasonCode code={c.reason_code} size="sm" />
         </td>
         <td className="py-2 pr-3">
           <span className="font-mono text-xs text-text-secondary" title={evidenceSnippet}>
@@ -307,7 +309,7 @@ function CandidateRow({
               {c.reason_code && (
                 <div>
                   <span className="font-semibold text-text-primary">Reason:</span>{" "}
-                  <span className="text-text-secondary">{c.reason_code}</span>
+                  <ReasonCode code={c.reason_code} size="sm" />
                 </div>
               )}
               {c.eval_confidence != null && (
@@ -344,19 +346,7 @@ function CandidateRow({
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
-function ReasonBadge({ code }: { code?: string | null }) {
-  if (!code) return <span className="text-xs text-text-secondary">—</span>;
-  const upper = code.toUpperCase();
-  let color = "bg-background text-text-secondary";
-  if (upper.includes("FAIL") || upper.includes("INELIGIBLE")) color = "bg-danger/10 text-danger";
-  else if (upper.includes("OCR") || upper.includes("PARSE")) color = "bg-attention/10 text-attention";
-  else if (upper.includes("VERIFY")) color = "bg-agent/10 text-agent";
-  return (
-    <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${color}`}>
-      {code}
-    </span>
-  );
-}
+// ReasonBadge replaced by shared ReasonCode component (Quest 05 Part 9)
 
 function ConfidenceBadge({ confidence }: { confidence: string | null }) {
   const color =

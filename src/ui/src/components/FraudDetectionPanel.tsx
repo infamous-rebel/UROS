@@ -10,6 +10,7 @@ import {
 } from "../hooks/hooks_fraud";
 import { getToken } from "../api/client";
 import { EmptyState } from "./EmptyState";
+import { ReasonCode } from "./ReasonCode";
 
 const SEVERITY_BADGE: Record<FraudSeverity, string> = {
   LOW: "bg-border-soft text-text-secondary",
@@ -100,7 +101,7 @@ function CandidateFlagsView({ candidateId }: { candidateId: string }) {
             </div>
           </div>
           <div className="mt-2 text-xs text-text-primary">{flag.reason_description}</div>
-          <div className="mt-1 text-[11px] text-text-secondary">Reason code: {flag.reason_code}</div>
+          <div className="mt-1"><ReasonCode code={flag.reason_code} size="sm" /></div>
           <details className="mt-2">
             <summary className="cursor-pointer text-xs text-agent underline">Why? (evidence)</summary>
             <pre className="mt-1 max-h-48 overflow-auto rounded bg-background p-2 text-[11px] text-text-secondary">

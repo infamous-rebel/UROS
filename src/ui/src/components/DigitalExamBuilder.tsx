@@ -20,6 +20,7 @@ import { EmptyState } from "./EmptyState";
 import { DownloadButton } from "./DownloadButton";
 import { getIcon } from "./navigation/iconRegistry";
 import { Icon } from "./navigation/Icon";
+import { ReasonCode } from "./ReasonCode";
 
 type DraftQuestion = Omit<ApiExamQuestion, "question_id" | "section_id"> & { question_id: string };
 type DraftSection = Omit<ApiExamSection, "section_id" | "exam_id" | "questions"> & { section_id: string; questions: DraftQuestion[] };
@@ -53,11 +54,7 @@ function WhyLink({ reasonCode, reasonDescription, evidenceRows }: { reasonCode: 
       </button>
       {open && (
         <div className="mt-1 rounded-md border border-border-soft bg-background p-2 text-[11px]">
-          {reasonCode && (
-            <div className="mb-1">
-              <span className="font-mono text-text-secondary">reason_code:</span> <span className="text-text-primary">{reasonCode}</span>
-            </div>
-          )}
+          {reasonCode && <ReasonCode code={reasonCode} size="sm" />}
           {reasonDescription && <div className="text-text-secondary">{reasonDescription}</div>}
           {evidenceRows && evidenceRows.length > 0 && (
             <table className="mt-1 w-full text-left">

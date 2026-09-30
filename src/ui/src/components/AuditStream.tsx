@@ -1,6 +1,7 @@
 import { useAuditStream } from "../api/hooks";
 import { getToken, ApiError, API_V1 } from "../api/client";
 import { DownloadButton } from "./DownloadButton";
+import { ReasonCode } from "./ReasonCode";
 
 export function AuditStream() {
   const { data, isLoading, isError, error } = useAuditStream();
@@ -39,7 +40,7 @@ export function AuditStream() {
                 <ActorBadge actor={entry.agent_or_user} /> · {entry.entity_type} · {entry.entity_id}
               </div>
               {entry.reason_code && (
-                <div className="mt-1 text-attention">{entry.reason_code}</div>
+                <div className="mt-1"><ReasonCode code={entry.reason_code} size="sm" /></div>
               )}
             </li>
           ))}

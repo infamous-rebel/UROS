@@ -110,3 +110,31 @@ jobs:
             exit 1
           fi
           echo "PASS: every tab is reachable via navConfig"
+
+      - name: Guard — no raw reason_code visible in UI components
+        run: |
+          # Check that no component directly renders {xxx.reason_code} without
+          # routing through the ReasonCode component.
+          # Allowed: passing as prop (code={xxx.reason_code}), comments, type defs.
+          leaks=$(grep -rn 'reason_code}' src/ui/src/components/ src/ui/src/pages/ --include="*.tsx" | grep -v 'code={' | grep -v 'reasonCode={' | grep -v 'key=' | grep -v '// ' | grep -v 'reasonCodes.ts' | grep -v 'ReasonCode.tsx' | wc -l)
+          echo "Raw reason_code displays found: $leaks"
+          if [ "$leaks" -gt 0 ]; then
+            echo "FAIL: raw reason_code is displayed to users without translation"
+            grep -rn 'reason_code}' src/ui/src/components/ src/ui/src/pages/ --include="*.tsx" | grep -v 'code={' | grep -v 'reasonCode={' | grep -v 'key=' | grep -v '// ' | grep -v 'reasonCodes.ts' | grep -v 'ReasonCode.tsx'
+            exit 1
+          fi
+          echo "PASS: no raw reason_code visible to users"
+
+      - name: Guard — reason code coverage
+        run: |
+          # Count unique reason codes emitted by backend agents
+          backend_codes=$(grep -rhoE 'reason_code:\s*"[A-Z_]+"' src/agents/ src/rules/ src/services/ --include="*.ts" | sed 's/reason_code:\s*"//;s/"//' | sort -u | wc -l)
+          # Count entries in the UI translation map
+          ui_codes=$(grep -cE '^\s+\w+:\s*\{$' src/ui/src/lib/reasonCodes.ts || true)
+          echo "Backend reason codes: $backend_codes"
+          echo "UI translation entries: $ui_codes"
+          if [ "$ui_codes" -lt 20 ]; then
+            echo "FAIL: reasonCodes.ts has fewer than 20 entries"
+            exit 1
+          fi
+          echo "PASS: reason code translation map is populated"

@@ -20,6 +20,7 @@ export function ResetPasswordScreen() {
   const [mismatch, setMismatch] = useState(false);
   const [policyError, setPolicyError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [touched, setTouched] = useState<{ password?: boolean; confirm?: boolean }>({});
 
   useEffect(() => {
     const raw = new URLSearchParams(window.location.search).get("token") ?? "";
@@ -45,6 +46,7 @@ export function ResetPasswordScreen() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setTouched({ password: true, confirm: true });
     if (!token || submitting) return;
     if (password !== confirm) {
       setMismatch(true);
@@ -117,8 +119,15 @@ export function ResetPasswordScreen() {
         minLength={10}
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        className="mt-1 w-full rounded-md border border-border-soft bg-background px-3 py-2 text-sm text-text-primary focus:border-agent focus:outline-none"
+        onBlur={() => setTouched((t) => ({ ...t, password: true }))}
+        className={`mt-1 w-full rounded-md border ${touched.password && password.length < 10 ? "border-danger" : "border-border-soft"} bg-background px-3 py-2 text-sm text-text-primary focus:border-agent focus:outline-none`}
       />
+      {touched.password && !password && (
+        <p className="mt-1 text-xs text-danger">This field is required.</p>
+      )}
+      {touched.password && password && password.length < 10 && (
+        <p className="mt-1 text-xs text-danger">Must be at least 10 characters.</p>
+      )}
 
       <label className="mt-3 block text-xs font-medium text-text-secondary" htmlFor="reset-confirm">
         {t("auth.confirmPasswordLabel")}
@@ -130,8 +139,15 @@ export function ResetPasswordScreen() {
         required
         value={confirm}
         onChange={(e) => setConfirm(e.target.value)}
-        className="mt-1 w-full rounded-md border border-border-soft bg-background px-3 py-2 text-sm text-text-primary focus:border-agent focus:outline-none"
+        onBlur={() => setTouched((t) => ({ ...t, confirm: true }))}
+        className={`mt-1 w-full rounded-md border ${touched.confirm && confirm && password !== confirm ? "border-danger" : "border-border-soft"} bg-background px-3 py-2 text-sm text-text-primary focus:border-agent focus:outline-none`}
       />
+      {touched.confirm && !confirm && (
+        <p className="mt-1 text-xs text-danger">This field is required.</p>
+      )}
+      {touched.confirm && confirm && password !== confirm && (
+        <p className="mt-1 text-xs text-danger">Passwords do not match.</p>
+      )}
 
       {(mismatch || policyError) && (
         <p role="alert" className="mt-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">

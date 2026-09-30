@@ -7,6 +7,7 @@
 import { usePipelineStageCounts } from "../api/hooks";
 import { PIPELINE_STAGE_STATUSES } from "../api/client";
 import { getToken } from "../api/client";
+import { PipelineSkeleton } from "./Skeleton";
 
 const STAGE_LABELS: Record<string, string> = {
   INTAKE: "Intake",
@@ -44,7 +45,7 @@ export function PipelineStrip() {
     <div className="rounded-lg border border-border-soft bg-surface p-4">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-text-primary">Live Pipeline</h2>
-        {anyLoading && !anyLoaded && <span className="text-xs text-text-secondary">Loading…</span>}
+        {anyLoading && !anyLoaded && <PipelineSkeleton />}
       </div>
       <div className="grid grid-cols-4 gap-3 md:grid-cols-8">
         {PIPELINE_STAGE_STATUSES.map((status, i) => {
