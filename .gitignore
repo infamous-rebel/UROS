@@ -12,3 +12,9 @@ coverage/
 uros-quest-*.zip
 evidence.html
 .qoder/
+
+# OCR corpus — generated artifacts (regenerate via npm run generate:corpus)
+tests/ocr-corpus/documents/
+tests/ocr-corpus/manifest.json
+tests/ocr-corpus/thresholds.json
+tests/ocr-corpus/templates/fonts.conf

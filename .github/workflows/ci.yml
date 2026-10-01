@@ -320,6 +320,9 @@ jobs:
         run: |
           PGPASSWORD=uros_test psql -U uros_test -d uros_test -h localhost -c "DELETE FROM gate_events;"
 
+      - name: Generate OCR corpus (deterministic)
+        run: npm run generate:corpus
+
       - name: Start API server
         run: npm run dev &
       - run: npx wait-on http://localhost:3000/health --timeout 60000
