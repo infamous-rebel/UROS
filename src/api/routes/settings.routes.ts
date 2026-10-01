@@ -112,7 +112,7 @@ router.get(
 
 const UserProfileSchema = z.object({
   full_name: z.string().min(1).max(200).optional(),
-  phone: z.string().min(6).max(20).optional(),
+  phone: z.string().min(6).max(20).optional().nullable(),
   preferred_language: z.string().min(2).max(5).optional(),
   theme_preference: z.enum(["light", "dark", "system"]).optional(),
 });

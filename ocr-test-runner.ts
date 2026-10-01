@@ -20,7 +20,7 @@ const CORPUS = path.resolve(__dirname, 'tests/ocr-corpus');
 interface ManifestSample {
   sample_id: string; document_type: string; script: string; quality: string;
   font_family: string; png_path: string; ground_truth_path: string;
-  width: number; height: number; dpi: number;
+  width: number; height: number; dpi: number; split: string;
 }
 interface Manifest {
   version: string; total_samples: number;
@@ -44,10 +44,12 @@ function expectedQuality(q: string): { usable: boolean; reason?: string } {
 async function main() {
   const manifest: Manifest = JSON.parse(fs.readFileSync(path.join(CORPUS, 'manifest.json'), 'utf-8'));
   const thresholds = JSON.parse(fs.readFileSync(path.join(CORPUS, 'thresholds.json'), 'utf-8'));
-  const total = manifest.samples.length;
+  // Tune on the TUNING split only — validation set is held out.
+  const tuningSamples = manifest.samples.filter(s => s.split === 'tuning');
+  const total = tuningSamples.length;
 
   console.log(`\n${'═'.repeat(70)}`);
-  console.log(`OCR Layers Test — ${total} samples`);
+  console.log(`OCR Layers Test — ${total} tuning samples (of ${manifest.samples.length} total)`);
   console.log(`${'═'.repeat(70)}\n`);
 
   // ─── Phase 1: Compute all results ────────────────────────────────────────
@@ -64,7 +66,7 @@ async function main() {
   const results: SampleResult[] = [];
 
   for (let i = 0; i < total; i++) {
-    const sample = manifest.samples[i];
+    const sample = tuningSamples[i];
     const raw = fs.readFileSync(path.join(CORPUS, sample.png_path));
     const downscaled = await downscaleBuffer(raw, ANALYSIS_MAX_EDGE);
     const gray = rawToGray(downscaled.buffer, downscaled.width, downscaled.height);
@@ -222,7 +224,7 @@ async function main() {
   // Pipeline rejection
   {
     console.log(`Pipeline Rejection:`);
-    const blurred = manifest.samples.find(s => s.quality === '300dpi_blurred' && s.document_type !== 'ssc_certificate')!;
+    const blurred = tuningSamples.find(s => s.quality === '300dpi_blurred')!;
     const buf = fs.readFileSync(path.join(CORPUS, blurred.png_path));
     const result = await runPipeline(buf);
     console.log(`  Sample: ${blurred.sample_id} (${blurred.quality})`);

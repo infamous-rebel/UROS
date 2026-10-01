@@ -41,6 +41,7 @@ interface ManifestSample {
   width: number;
   height: number;
   dpi: number;
+  split: string;
 }
 
 interface Manifest {
@@ -97,13 +98,16 @@ describe('OCR Layers 0–2b', () => {
   const thresholds = loadThresholds();
   let results: SampleResults[] = [];
 
+  // Tune on the TUNING split only — validation set is held out.
+  const tuningSamples = manifest.samples.filter(s => s.split === 'tuning');
+
   // ─── Compute ALL results ONCE ──────────────────────────────────────────────
   beforeAll(async () => {
-    console.log(`\n  Computing results for ${manifest.total_samples} samples...`);
+    console.log(`\n  Computing results for ${tuningSamples.length} tuning samples (of ${manifest.total_samples} total)...`);
     const startTime = Date.now();
 
-    for (let i = 0; i < manifest.samples.length; i++) {
-      const sample = manifest.samples[i];
+    for (let i = 0; i < tuningSamples.length; i++) {
+      const sample = tuningSamples[i];
       const raw = loadSampleImage(sample);
       const downscaled = await downscaleBuffer(raw, ANALYSIS_MAX_EDGE);
       const gray = rawToGray(downscaled.buffer, downscaled.width, downscaled.height);
@@ -137,13 +141,13 @@ describe('OCR Layers 0–2b', () => {
       // Progress indicator every 10 samples
       if ((i + 1) % 10 === 0) {
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
-        console.log(`    ${i + 1}/${manifest.total_samples} processed (${elapsed}s)`);
+        console.log(`    ${i + 1}/${tuningSamples.length} processed (${elapsed}s)`);
       }
     }
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
     console.log(`  All results computed in ${elapsed}s\n`);
-  }, 1200_000); // 20 minutes for 80 samples
+  }, 1200_000); // 20 minutes for 60 tuning samples
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // LAYER 0 — Quality Assessment
@@ -284,7 +288,7 @@ describe('OCR Layers 0–2b', () => {
   // ═══════════════════════════════════════════════════════════════════════════════
 
   it('Pipeline — runs one sample end-to-end', async () => {
-    const sample = manifest.samples.find((s) => s.quality === '300dpi_clean')!;
+    const sample = tuningSamples.find((s) => s.quality === '300dpi_clean')!;
     const buf = loadSampleImage(sample);
 
     console.log(`\n  Pipeline Integration Test:`);
@@ -314,7 +318,7 @@ describe('OCR Layers 0–2b', () => {
   }, 300_000);
 
   it('Pipeline — rejects unusable images at Layer 0', async () => {
-    const blurred = manifest.samples.find((s) => s.quality === '300dpi_blurred')!;
+    const blurred = tuningSamples.find((s) => s.quality === '300dpi_blurred')!;
     const buf = loadSampleImage(blurred);
 
     const result = await runPipeline(buf);

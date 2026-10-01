@@ -139,7 +139,7 @@ function ProfileTab() {
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [errors, setErrors] = useState<{ name?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; phone?: string }>({});
 
   const load = useCallback(async () => {
     try {
@@ -160,15 +160,16 @@ function ProfileTab() {
   if (!user) return <EmptyState message={t("settings.profileLoadFailed")} />;
 
   async function handleSave() {
-    const errs: { name?: string } = {};
+    const errs: { name?: string; phone?: string } = {};
     if (!name.trim()) errs.name = t("settings.required");
+    if (phone && phone.length < 6) errs.phone = t("settings.phoneOptionalHint");
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setErrors({});
     setSaving(true);
     try {
       await authedRequest(`${API_V1}/settings/me/profile`, {
         method: "PATCH",
-        body: JSON.stringify({ full_name: name, phone }),
+        body: JSON.stringify({ full_name: name, phone: phone || null }),
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -191,7 +192,8 @@ function ProfileTab() {
         <input value={user.email} disabled className={`${inputClass} opacity-50`} />
       </Field>
       <Field label={t("settings.phone")}>
-        <input value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} placeholder="+880…" />
+        <input value={phone} onChange={(e) => { setPhone(e.target.value); setErrors((prev) => ({ ...prev, phone: undefined })); }} className={errors.phone ? inputClassError : inputClass} placeholder="+880…" />
+        {errors.phone && <FieldError message={errors.phone} />}
       </Field>
       <Field label={t("settings.role")}>
         <input value={user.role} disabled className={`${inputClass} opacity-50`} />
@@ -440,6 +442,13 @@ function CredentialsTab() {
   const { t } = useI18n();
   const [creds, setCreds] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [connector, setConnector] = useState("llm");
+  const [label, setLabel] = useState("default");
+  const [apiKey, setApiKey] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [budgetCap, setBudgetCap] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -452,14 +461,70 @@ function CredentialsTab() {
 
   if (loading) return <p className="text-sm text-text-secondary">{t("settings.loadingCreds")}</p>;
 
+  async function handleCreate() {
+    if (!apiKey || apiKey.length < 8) return;
+    setSaving(true);
+    try {
+      await authedRequest(`${API_V1}/credentials`, {
+        method: "POST",
+        body: JSON.stringify({
+          connector, label, api_key: apiKey,
+          base_url: baseUrl || undefined,
+          budget_cap: budgetCap ? Number(budgetCap) : undefined,
+        }),
+      });
+      setShowForm(false); setApiKey(""); setBaseUrl(""); setBudgetCap(""); setLabel("default");
+      await load();
+    } catch { /* */ } finally { setSaving(false); }
+  }
+
+  async function handleRotate(id: string) {
+    const newKey = prompt("Enter new API key (min 8 characters):");
+    if (!newKey || newKey.length < 8) return;
+    try {
+      await authedRequest(`${API_V1}/credentials/${id}`, {
+        method: "PATCH", body: JSON.stringify({ api_key: newKey }),
+      });
+      await load();
+    } catch { /* */ }
+  }
+
+  async function handleRevoke(id: string) {
+    try {
+      await authedRequest(`${API_V1}/credentials/${id}`, { method: "DELETE" });
+      await load();
+    } catch { /* */ }
+  }
+
+  const CONNECTORS = ["llm","email","sms_provider","whatsapp_business","bdjobs","teletalk","calendar","education_board","cib","police","sms_teletalk","sms_grameenphone","sms_banglalink","sms_robi","sms_airtel","sms_ssl_wireless","voip","email_smtp","email_imap","email_gmail_api","email_sendgrid","whatsapp_meta","bdjobs_scraper","calendar_google","calendar_outlook","teletalk_sms","teletalk_cv_bank"];
+
   return (
     <div>
-      <SectionTitle title={t("settings.byok")} description={t("settings.byokDesc")} />
+      <div className="mb-4 flex items-center justify-between">
+        <SectionTitle title={t("settings.byok")} description={t("settings.byokDesc")} />
+        <button onClick={() => setShowForm(!showForm)} className="rounded-md bg-agent px-3 py-1.5 text-xs font-semibold text-white">
+          {showForm ? t("common.cancel") : t("settings.addCredential")}
+        </button>
+      </div>
+      {showForm && (
+        <div className="mb-4 rounded-lg border border-agent/30 bg-background p-3">
+          <Field label={t("settings.connector")}>
+            <select value={connector} onChange={(e) => setConnector(e.target.value)} className={inputClass}>
+              {CONNECTORS.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </Field>
+          <Field label={t("settings.label")}><input value={label} onChange={(e) => setLabel(e.target.value)} className={inputClass} /></Field>
+          <Field label={t("settings.apiKey")}><input value={apiKey} onChange={(e) => setApiKey(e.target.value)} className={inputClass} type="password" /></Field>
+          <Field label={t("settings.baseUrl")}><input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} className={inputClass} placeholder="https://..." /></Field>
+          <Field label={t("settings.budgetCap")}><input value={budgetCap} onChange={(e) => setBudgetCap(e.target.value)} className={inputClass} type="number" /></Field>
+          <SaveButton onClick={handleCreate} saving={saving} label={t("common.create")} />
+        </div>
+      )}
       {creds.length === 0 ? <EmptyState message={t("settings.noCreds")} /> : (
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-border-soft text-xs uppercase text-text-secondary">
-              <th className="pb-2">{t("settings.connector")}</th><th className="pb-2">{t("settings.label")}</th><th className="pb-2">{t("settings.keyHint")}</th><th className="pb-2">{t("settings.status")}</th><th className="pb-2">{t("settings.created")}</th>
+              <th className="pb-2">{t("settings.connector")}</th><th className="pb-2">{t("settings.label")}</th><th className="pb-2">{t("settings.keyHint")}</th><th className="pb-2">{t("settings.status")}</th><th className="pb-2">{t("settings.created")}</th><th className="pb-2 text-right">{t("settings.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -467,9 +532,17 @@ function CredentialsTab() {
               <tr key={c.credential_id} className="border-b border-border-soft last:border-0">
                 <td className="py-2 font-mono text-xs text-text-primary">{c.connector}</td>
                 <td className="py-2 text-text-secondary">{c.label}</td>
-                <td className="py-2 font-mono text-xs text-text-secondary">{c.key_hint ?? "••••"}</td>
+                <td className="py-2 font-mono text-xs text-text-secondary">{c.key_hint ?? "\u2022\u2022\u2022\u2022"}</td>
                 <td className="py-2"><span className={`rounded px-1.5 py-0.5 text-xs ${c.active !== false ? "bg-success/10 text-success" : "bg-human/10 text-human"}`}>{c.active !== false ? t("settings.credActive") : t("settings.credRevoked")}</span></td>
                 <td className="py-2 text-xs text-text-secondary">{new Date(c.created_at).toLocaleDateString()}</td>
+                <td className="py-2 text-right">
+                  {c.active !== false && (
+                    <button onClick={() => handleRotate(c.credential_id)} className="mr-2 text-xs text-agent hover:underline">{t("settings.rotate")}</button>
+                  )}
+                  {c.active !== false && (
+                    <button onClick={() => handleRevoke(c.credential_id)} className="text-xs text-human hover:underline">{t("settings.revoke")}</button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -621,6 +694,14 @@ function PersonasTab() {
   const { t } = useI18n();
   const [personas, setPersonas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [department, setDepartment] = useState("");
+  const [jobFamily, setJobFamily] = useState("");
+  const [personaName, setPersonaName] = useState("");
+  const [reqs, setReqs] = useState<{ field_path: string; operator: string; value: string; weight: number }[]>([
+    { field_path: "", operator: "EQ", value: "", weight: 1 },
+  ]);
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -633,15 +714,71 @@ function PersonasTab() {
 
   if (loading) return <p className="text-sm text-text-secondary">{t("settings.loadingPersonas")}</p>;
 
+  async function handleCreate() {
+    if (!department || !jobFamily || !personaName) return;
+    const requirements = reqs.filter((r) => r.field_path).map((r) => ({
+      field_path: r.field_path, operator: r.operator, value: r.value, weight: r.weight,
+    }));
+    if (requirements.length === 0) return;
+    setSaving(true);
+    try {
+      await authedRequest(`${API_V1}/personas`, {
+        method: "POST",
+        body: JSON.stringify({ department, job_family: jobFamily, name: personaName, requirements }),
+      });
+      setShowForm(false);
+      setDepartment(""); setJobFamily(""); setPersonaName("");
+      setReqs([{ field_path: "", operator: "EQ", value: "", weight: 1 }]);
+      await load();
+    } catch { /* */ } finally { setSaving(false); }
+  }
+
+  async function handleDelete(id: string) {
+    try {
+      await authedRequest(`${API_V1}/personas/${id}`, { method: "DELETE" });
+      await load();
+    } catch { /* */ }
+  }
+
   return (
     <div>
-      <SectionTitle title={t("settings.personas")} description={t("settings.personasDesc")} />
-      {personas.length === 0 ? <EmptyState message={t("settings.noPersonas")} /> : (
+      <div className="mb-4 flex items-center justify-between">
+        <SectionTitle title={t("settings.personas")} description={t("settings.personasDesc")} />
+        <button onClick={() => setShowForm(!showForm)} className="rounded-md bg-agent px-3 py-1.5 text-xs font-semibold text-white">
+          {showForm ? t("common.cancel") : t("settings.createPersona")}
+        </button>
+      </div>
+      {showForm && (
+        <div className="mb-4 rounded-lg border border-agent/30 bg-background p-3">
+          <Field label={t("settings.department")}><input value={department} onChange={(e) => setDepartment(e.target.value)} className={inputClass} /></Field>
+          <Field label={t("settings.jobFamily")}><input value={jobFamily} onChange={(e) => setJobFamily(e.target.value)} className={inputClass} /></Field>
+          <Field label={t("settings.personaName")}><input value={personaName} onChange={(e) => setPersonaName(e.target.value)} className={inputClass} /></Field>
+          <div className="mb-2">
+            <label className="mb-1 block text-xs font-medium text-text-secondary">{t("settings.requirements")}</label>
+            {reqs.map((r, i) => (
+              <div key={i} className="mb-1 flex gap-1">
+                <input value={r.field_path} onChange={(e) => { const n = [...reqs]; n[i].field_path = e.target.value; setReqs(n); }} className={inputClass} placeholder={t("settings.fieldPath")} />
+                <select value={r.operator} onChange={(e) => { const n = [...reqs]; n[i].operator = e.target.value; setReqs(n); }} className={inputClass}>
+                  {["EQ","NEQ","LT","LTE","GT","GTE","IN","NOT_IN","REGEX"].map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+                <input value={r.value} onChange={(e) => { const n = [...reqs]; n[i].value = e.target.value; setReqs(n); }} className={inputClass} placeholder={t("settings.fieldValue")} />
+                <input type="number" value={r.weight} onChange={(e) => { const n = [...reqs]; n[i].weight = Number(e.target.value); setReqs(n); }} className={`${inputClass} w-16`} />
+              </div>
+            ))}
+            <button onClick={() => setReqs([...reqs, { field_path: "", operator: "EQ", value: "", weight: 1 }])} className="text-xs text-agent hover:underline">{t("settings.addField")}</button>
+          </div>
+          <SaveButton onClick={handleCreate} saving={saving} label={t("common.create")} />
+        </div>
+      )}
+      {personas.length === 0 ? <EmptyState message={t("settings.noPersonasCreated")} /> : (
         <div className="space-y-2">
           {personas.map((p: any) => (
-            <div key={p.persona_id} className="rounded-lg border border-border-soft bg-background p-3">
-              <h4 className="text-sm font-medium text-text-primary">{p.name}</h4>
-              <p className="text-xs text-text-secondary">{p.department ?? t("settings.general")}</p>
+            <div key={p.persona_id} className="flex items-center justify-between rounded-lg border border-border-soft bg-background p-3">
+              <div>
+                <h4 className="text-sm font-medium text-text-primary">{p.name}</h4>
+                <p className="text-xs text-text-secondary">{p.department} · {p.job_family}</p>
+              </div>
+              <button onClick={() => handleDelete(p.persona_id)} className="text-xs text-human hover:underline">{t("common.delete")}</button>
             </div>
           ))}
         </div>
@@ -656,11 +793,17 @@ function KpiTab() {
   const { t } = useI18n();
   const [kpis, setKpis] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [role, setRole] = useState("");
+  const [kpiName, setKpiName] = useState("");
+  const [cycle, setCycle] = useState("MONTHLY");
+  const [terms, setTerms] = useState<{ metric_field: string; weight: number }[]>([{ metric_field: "", weight: 100 }]);
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const res = await authedRequest<any>(`${API_V1}/kpi/definitions`);
-      setKpis(res.definitions ?? res.kpis ?? []);
+      setKpis(res.kpi_definitions ?? []);
     } catch { /* */ } finally { setLoading(false); }
   }, []);
 
@@ -668,15 +811,69 @@ function KpiTab() {
 
   if (loading) return <p className="text-sm text-text-secondary">{t("settings.loadingKpis")}</p>;
 
+  async function handleCreate() {
+    if (!role || !kpiName) return;
+    const formula = terms.filter((t) => t.metric_field).map((t) => ({ metric_field: t.metric_field, weight: t.weight }));
+    if (formula.length === 0) return;
+    if (formula.reduce((s, t) => s + t.weight, 0) !== 100) return;
+    setSaving(true);
+    try {
+      await authedRequest(`${API_V1}/kpi/definitions`, {
+        method: "POST",
+        body: JSON.stringify({ role, name: kpiName, formula, cycle }),
+      });
+      setShowForm(false); setRole(""); setKpiName("");
+      setTerms([{ metric_field: "", weight: 100 }]);
+      await load();
+    } catch { /* */ } finally { setSaving(false); }
+  }
+
+  async function handleDelete(id: string) {
+    try {
+      await authedRequest(`${API_V1}/kpi/definitions/${id}`, { method: "DELETE" });
+      await load();
+    } catch { /* */ }
+  }
+
   return (
     <div>
-      <SectionTitle title={t("settings.kpi")} description={t("settings.kpiDesc")} />
-      {kpis.length === 0 ? <EmptyState message={t("settings.noKpis")} /> : (
+      <div className="mb-4 flex items-center justify-between">
+        <SectionTitle title={t("settings.kpi")} description={t("settings.kpiDesc")} />
+        <button onClick={() => setShowForm(!showForm)} className="rounded-md bg-agent px-3 py-1.5 text-xs font-semibold text-white">
+          {showForm ? t("common.cancel") : t("settings.createKpi")}
+        </button>
+      </div>
+      {showForm && (
+        <div className="mb-4 rounded-lg border border-agent/30 bg-background p-3">
+          <Field label={t("settings.role")}><input value={role} onChange={(e) => setRole(e.target.value)} className={inputClass} /></Field>
+          <Field label={t("settings.kpiName")}><input value={kpiName} onChange={(e) => setKpiName(e.target.value)} className={inputClass} /></Field>
+          <Field label={t("settings.cycle")}>
+            <select value={cycle} onChange={(e) => setCycle(e.target.value)} className={inputClass}>
+              <option value="MONTHLY">Monthly</option><option value="QUARTERLY">Quarterly</option><option value="ANNUAL">Annual</option>
+            </select>
+          </Field>
+          <div className="mb-2">
+            <label className="mb-1 block text-xs font-medium text-text-secondary">{t("settings.formulaTerms")}</label>
+            {terms.map((tm, i) => (
+              <div key={i} className="mb-1 flex gap-2">
+                <input value={tm.metric_field} onChange={(e) => { const n = [...terms]; n[i].metric_field = e.target.value; setTerms(n); }} className={inputClass} placeholder={t("settings.metricField")} />
+                <input type="number" value={tm.weight} onChange={(e) => { const n = [...terms]; n[i].weight = Number(e.target.value); setTerms(n); }} className={`${inputClass} w-20`} placeholder={t("settings.termWeight")} />
+              </div>
+            ))}
+            <button onClick={() => setTerms([...terms, { metric_field: "", weight: 0 }])} className="text-xs text-agent hover:underline">{t("settings.addTerm")}</button>
+          </div>
+          <SaveButton onClick={handleCreate} saving={saving} label={t("common.create")} />
+        </div>
+      )}
+      {kpis.length === 0 ? <EmptyState message={t("settings.noKpisCreated")} /> : (
         <div className="space-y-2">
           {kpis.map((k: any) => (
-            <div key={k.kpi_definition_id ?? k.id} className="rounded border border-border-soft bg-background p-2 text-xs">
-              <span className="font-medium text-text-primary">{k.name ?? k.kpi_name}</span>
-              <span className="ml-2 text-text-secondary">{t("settings.roleLabel")}: {k.role} · {t("settings.weightLabel")}: {k.weight ?? 1}</span>
+            <div key={k.kpi_definition_id ?? k.id} className="flex items-center justify-between rounded border border-border-soft bg-background p-2 text-xs">
+              <div>
+                <span className="font-medium text-text-primary">{k.name}</span>
+                <span className="ml-2 text-text-secondary">{t("settings.roleLabel")}: {k.role} · {k.cycle}</span>
+              </div>
+              <button onClick={() => handleDelete(k.kpi_definition_id)} className="text-xs text-human hover:underline">{t("common.delete")}</button>
             </div>
           ))}
         </div>
@@ -691,6 +888,12 @@ function OnboardingTab() {
   const { t } = useI18n();
   const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [tmplName, setTmplName] = useState("");
+  const [items, setItems] = useState<{ item_code: string; label: string; category: string; assigned_role: string; default_due_days: number }[]>([
+    { item_code: "", label: "", category: "", assigned_role: "", default_due_days: 7 },
+  ]);
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -703,15 +906,68 @@ function OnboardingTab() {
 
   if (loading) return <p className="text-sm text-text-secondary">{t("settings.loadingTemplates")}</p>;
 
+  async function handleCreate() {
+    if (!tmplName) return;
+    const checklist_items = items.filter((it) => it.item_code && it.label).map((it) => ({
+      item_code: it.item_code, label: it.label, category: it.category || undefined,
+      assigned_role: it.assigned_role || undefined, default_due_days: it.default_due_days,
+    }));
+    if (checklist_items.length === 0) return;
+    setSaving(true);
+    try {
+      await authedRequest(`${API_V1}/onboarding/templates`, {
+        method: "POST",
+        body: JSON.stringify({ name: tmplName, checklist_items }),
+      });
+      setShowForm(false); setTmplName("");
+      setItems([{ item_code: "", label: "", category: "", assigned_role: "", default_due_days: 7 }]);
+      await load();
+    } catch { /* */ } finally { setSaving(false); }
+  }
+
+  async function handleDelete(id: string) {
+    try {
+      await authedRequest(`${API_V1}/onboarding/templates/${id}`, { method: "DELETE" });
+      await load();
+    } catch { /* */ }
+  }
+
   return (
     <div>
-      <SectionTitle title={t("settings.onboarding")} description={t("settings.onboardingDesc")} />
-      {templates.length === 0 ? <EmptyState message={t("settings.noTemplates")} /> : (
+      <div className="mb-4 flex items-center justify-between">
+        <SectionTitle title={t("settings.onboarding")} description={t("settings.onboardingDesc")} />
+        <button onClick={() => setShowForm(!showForm)} className="rounded-md bg-agent px-3 py-1.5 text-xs font-semibold text-white">
+          {showForm ? t("common.cancel") : t("settings.createTemplate")}
+        </button>
+      </div>
+      {showForm && (
+        <div className="mb-4 rounded-lg border border-agent/30 bg-background p-3">
+          <Field label={t("settings.templateName")}><input value={tmplName} onChange={(e) => setTmplName(e.target.value)} className={inputClass} /></Field>
+          <div className="mb-2">
+            <label className="mb-1 block text-xs font-medium text-text-secondary">{t("settings.checklistItems")}</label>
+            {items.map((it, i) => (
+              <div key={i} className="mb-1 flex gap-1">
+                <input value={it.item_code} onChange={(e) => { const n = [...items]; n[i].item_code = e.target.value; setItems(n); }} className={inputClass} placeholder={t("settings.itemCode")} />
+                <input value={it.label} onChange={(e) => { const n = [...items]; n[i].label = e.target.value; setItems(n); }} className={inputClass} placeholder={t("settings.itemLabel")} />
+                <input value={it.category} onChange={(e) => { const n = [...items]; n[i].category = e.target.value; setItems(n); }} className={inputClass} placeholder={t("settings.category")} />
+                <input value={it.assigned_role} onChange={(e) => { const n = [...items]; n[i].assigned_role = e.target.value; setItems(n); }} className={inputClass} placeholder={t("settings.assigneeRole")} />
+                <input type="number" value={it.default_due_days} onChange={(e) => { const n = [...items]; n[i].default_due_days = Number(e.target.value); setItems(n); }} className={`${inputClass} w-16`} placeholder={t("settings.dueDays")} />
+              </div>
+            ))}
+            <button onClick={() => setItems([...items, { item_code: "", label: "", category: "", assigned_role: "", default_due_days: 7 }])} className="text-xs text-agent hover:underline">{t("settings.addItem")}</button>
+          </div>
+          <SaveButton onClick={handleCreate} saving={saving} label={t("common.create")} />
+        </div>
+      )}
+      {templates.length === 0 ? <EmptyState message={t("settings.noTemplatesCreated")} /> : (
         <div className="space-y-2">
           {templates.map((tmpl: any) => (
-            <div key={tmpl.template_id} className="rounded border border-border-soft bg-background p-2 text-xs">
-              <span className="font-medium text-text-primary">{tmpl.role}</span>
-              <span className="ml-2 text-text-secondary">{t("settings.steps", { count: tmpl.steps?.length ?? 0 })}</span>
+            <div key={tmpl.template_id} className="flex items-center justify-between rounded border border-border-soft bg-background p-2 text-xs">
+              <div>
+                <span className="font-medium text-text-primary">{tmpl.name}</span>
+                <span className="ml-2 text-text-secondary">{t("settings.steps", { count: tmpl.checklist_items?.length ?? 0 })}</span>
+              </div>
+              <button onClick={() => handleDelete(tmpl.template_id)} className="text-xs text-human hover:underline">{t("common.delete")}</button>
             </div>
           ))}
         </div>
