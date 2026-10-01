@@ -253,6 +253,10 @@ Before starting any Part of a Quest, the Quest spec must exist at `docs/quests/q
 
 This ensures that context shifts (session crashes, hand-offs) do not lose the Quest plan. The spec is the single source of truth for what each Part delivers.
 
+### Rule 23 — Tests are not weakened to pass
+
+If a test fails, the fix is either (a) fix the code under test, or (b) fix the test's environment setup. It is never to remove the assertion, simplify the assertion, or replace a specific check with a general one. Any test simplification must be explained in the commit message with a reason and reviewed by the user before commit.
+
 
 ---
 

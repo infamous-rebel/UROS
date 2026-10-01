@@ -22,10 +22,15 @@ test.describe("HIL Gates", () => {
     await expect(page.locator("text=Recently Resolved").first()).toBeVisible({ timeout: 10_000 });
   });
 
-  test("gate inbox loads and shows content", async ({ page, login }) => {
+  test("empty state shows helpful message", async ({ page, login }) => {
     await login("admin@uros.gov.bd", "Admin@1234");
     await page.click("text=HIL Gates");
     await expect(page.locator("text=Human-in-the-Loop Gate Inbox").first()).toBeVisible({ timeout: 10_000 });
-    // Page loaded successfully — content may vary based on gate events
+    // Wait for API response to ensure data is loaded
+    await page.waitForLoadState("networkidle");
+    // Empty state shows "0 pending" badge, "No gates waiting for review.", and "Pipeline is flowing"
+    await expect(page.locator("text=0 pending").first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator("text=No gates waiting").first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator("text=Pipeline is flowing").first()).toBeVisible({ timeout: 5_000 });
   });
 });
