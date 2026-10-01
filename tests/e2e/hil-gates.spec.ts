@@ -8,7 +8,7 @@ test.describe("HIL Gates", () => {
   test.beforeEach(async ({ page, login }) => {
     await login("admin@uros.gov.bd", "Admin@1234");
     // Get the auth token from localStorage
-    const token = await page.evaluate(() => localStorage.getItem("uros_token"));
+    const token = await page.evaluate(() => localStorage.getItem("uros_dev_token"));
     if (token) {
       // Fetch all pending gates
       const gates = await page.evaluate(async (tok) => {
