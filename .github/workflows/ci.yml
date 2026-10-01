@@ -316,6 +316,10 @@ jobs:
       - name: Seed test user
         run: node scripts/seed_ci.js
 
+      - name: Clear any existing gates
+        run: |
+          PGPASSWORD=uros_test psql -U uros_test -d uros_test -h localhost -c "DELETE FROM gate_events;"
+
       - name: Start API server
         run: npm run dev &
       - run: npx wait-on http://localhost:3000/health --timeout 60000
