@@ -1,0 +1,24 @@
+{
+  "candidate_id": "corpus-hsc-001-003",
+  "document_type": "hsc_certificate",
+  "script": "bangla",
+  "quality": "150dpi_clean",
+  "source_template": "generator/hsc_certificate",
+  "sample_index": 2,
+  "expected": {
+    "full_name": "মোঃ রফিকুল ইসলাম",
+    "father_name": "মোঃ আব্দুল করিম",
+    "mother_name": "মোছাঃ রহিমা বেগম",
+    "date_of_birth": "1998-05-12",
+    "roll_number": "345678",
+    "registration": "1812345678",
+    "institution": "ঢাকা বোর্ড",
+    "passing_year": 2018,
+    "division_class": "First",
+    "cgpa": 5,
+    "subject_major": "Science",
+    "district": "ঢাকা",
+    "division": "ঢাকা",
+    "college": "ঢাকা কলেজ"
+  }
+}

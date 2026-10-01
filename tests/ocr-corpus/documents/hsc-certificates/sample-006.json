@@ -1,0 +1,24 @@
+{
+  "candidate_id": "corpus-hsc-002-006",
+  "document_type": "hsc_certificate",
+  "script": "bangla",
+  "quality": "300dpi_clean",
+  "source_template": "generator/hsc_certificate",
+  "sample_index": 5,
+  "expected": {
+    "full_name": "ফাতিমা আক্তার",
+    "father_name": "মোঃ নজরুল ইসলাম",
+    "mother_name": "সালেহা বেগম",
+    "date_of_birth": "1999-03-22",
+    "roll_number": "456789",
+    "registration": "1912345679",
+    "institution": "চট্টগ্রাম বোর্ড",
+    "passing_year": 2019,
+    "division_class": "First",
+    "cgpa": 4.89,
+    "subject_major": "Science",
+    "district": "চট্টগ্রাম",
+    "division": "চট্টগ্রাম",
+    "college": "চট্টগ্রাম কলেজ"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "candidate_id": "corpus-bank-001-003",
+  "document_type": "bank_application",
+  "script": "english",
+  "quality": "150dpi_clean",
+  "source_template": "generator/bank_application",
+  "sample_index": 2,
+  "expected": {
+    "full_name": "Md. Rafiqul Islam",
+    "father_name": "Md. Abdul Karim",
+    "mother_name": "Rahima Begum",
+    "date_of_birth": "1998-05-12",
+    "national_id": "1234567890",
+    "phone": "01712345678",
+    "email": "rafiq@example.com",
+    "permanent_address": "Village: Mirpur, PS: Mirpur, Dist: Dhaka",
+    "present_address": "House 12, Road 5, Dhanmondi, Dhaka",
+    "district": "Dhaka",
+    "division": "Dhaka",
+    "account_type": "Savings",
+    "initial_deposit": "1000",
+    "nomination_name": "Rahima Begum",
+    "nomination_relation": "Mother",
+    "occupation": "Service",
+    "employer_name": "ABC Company",
+    "monthly_income": "45000"
+  }
+}

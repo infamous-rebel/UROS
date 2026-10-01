@@ -1,0 +1,51 @@
+{
+  "candidate_id": "corpus-transcript-001-001",
+  "document_type": "university_transcript",
+  "script": "english",
+  "quality": "300dpi_clean",
+  "source_template": "generator/university_transcript",
+  "sample_index": 0,
+  "expected": {
+    "full_name": "Md. Rafiqul Islam",
+    "father_name": "Md. Abdul Karim",
+    "mother_name": "Rahima Begum",
+    "date_of_birth": "1998-05-12",
+    "university": "University of Dhaka",
+    "degree": "B.Sc. in Computer Science",
+    "passing_year": 2022,
+    "cgpa": 3.75,
+    "total_credits": 120,
+    "courses": [
+      {
+        "code": "CSE101",
+        "title": "Introduction to Programming",
+        "credit": 3,
+        "grade": "A"
+      },
+      {
+        "code": "CSE201",
+        "title": "Data Structures",
+        "credit": 3,
+        "grade": "A-"
+      },
+      {
+        "code": "MATH101",
+        "title": "Calculus I",
+        "credit": 3,
+        "grade": "B+"
+      },
+      {
+        "code": "ENG101",
+        "title": "English Composition",
+        "credit": 2,
+        "grade": "A"
+      },
+      {
+        "code": "CSE301",
+        "title": "Algorithms",
+        "credit": 3,
+        "grade": "A"
+      }
+    ]
+  }
+}

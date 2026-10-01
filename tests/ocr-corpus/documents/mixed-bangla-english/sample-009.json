@@ -1,0 +1,21 @@
+{
+  "candidate_id": "corpus-mixed-001-009",
+  "document_type": "mixed_bangla_english",
+  "script": "mixed",
+  "quality": "300dpi_blurred",
+  "source_template": "generator/mixed_bangla_english",
+  "sample_index": 8,
+  "expected": {
+    "full_name": "মোঃ রফিকুল ইসলাম (Md. Rafiqul Islam)",
+    "father_name": "মোঃ আব্দুল করিম",
+    "date_of_birth": "1998-05-12",
+    "phone": "01712345678",
+    "email": "rafiq@example.com",
+    "institution": "University of Dhaka / ঢাকা বিশ্ববিদ্যালয়",
+    "degree": "B.Sc. in CSE",
+    "passing_year": 2022,
+    "cgpa": 3.75,
+    "skills": "Python, JavaScript, ঢাকা, চট্টগ্রাম",
+    "language": "Bangla (Native), English (Fluent)"
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "version": "1.0.0",
+  "defaults": {
+    "layer-00-quality": {
+      "threshold": 0.95,
+      "metric": "agreement_with_human_labels",
+      "corpus_size": 200
+    },
+    "layer-01-preprocess": {
+      "threshold": 0.9,
+      "metric": "usability_by_layer_2",
+      "corpus_size": 80
+    },
+    "layer-02-layout": {
+      "threshold": 0.85,
+      "metric": "region_detection_f1",
+      "corpus_size": 80
+    },
+    "layer-02b-table": {
+      "threshold": 0.8,
+      "metric": "cell_level_accuracy",
+      "corpus_size": 80
+    },
+    "layer-03-recognition": {
+      "thresholds": [
+        {
+          "script": "printed_bangla",
+          "threshold": 0.85,
+          "metric": "character_accuracy"
+        },
+        {
+          "script": "printed_english",
+          "threshold": 0.92,
+          "metric": "character_accuracy"
+        },
+        {
+          "script": "handwritten_digits",
+          "threshold": 0.7,
+          "metric": "character_accuracy"
+        }
+      ]
+    },
+    "layer-03b-ensemble": {
+      "threshold": 0.05,
+      "metric": "relative_improvement_over_baseline"
+    },
+    "layer-04-extraction": {
+      "threshold": 0.9,
+      "metric": "field_level_accuracy",
+      "corpus_size": 80
+    },
+    "layer-04b-spelling": {
+      "threshold": 0.3,
+      "metric": "relative_cer_reduction",
+      "corpus_size": 80
+    },
+    "layer-05-validation": {
+      "threshold": 1,
+      "metric": "contradiction_detection_rate",
+      "corpus_size": 20
+    },
+    "layer-05b-forgery": {
+      "thresholds": [
+        {
+          "metric": "precision_on_tampered",
+          "threshold": 0.8
+        },
+        {
+          "metric": "specificity_on_authentic",
+          "threshold": 0.95
+        }
+      ]
+    },
+    "layer-06-confidence": {
+      "threshold": 0.9,
+      "metric": "agreement_with_human_rating",
+      "corpus_size": 100
+    },
+    "layer-07-routing": {
+      "threshold": 0.95,
+      "metric": "correct_routing_decisions",
+      "corpus_size": 80
+    }
+  }
+}
