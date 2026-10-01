@@ -5,7 +5,7 @@ export default defineConfig({
   testIgnore: ["**/screenshot-curator.spec.ts", "**/dark-mode-curator.spec.ts"],
   timeout: 60_000,
   retries: process.env.CI ? 1 : 0,
-  workers: process.env.CI ? 2 : 1,
+  workers: process.env.CI ? 1 : 1,
   reporter: [["html", { open: "never" }], ["list"]],
   use: {
     baseURL: process.env.BASE_URL ?? "http://localhost:5173",
