@@ -258,6 +258,76 @@ This ensures that context shifts (session crashes, hand-offs) do not lose the Qu
 If a test fails, the fix is either (a) fix the code under test, or (b) fix the test's environment setup. It is never to remove the assertion, simplify the assertion, or replace a specific check with a general one. Any test simplification must be explained in the commit message with a reason and reviewed by the user before commit.
 
 
+### Rule 24 — OCR layer isolation
+
+Every OCR layer is an independent, testable module. Each layer:
+
+- Has a single responsibility
+- Has typed input and output contracts
+- Has its own folder under src/services/ocr/layer-NN-name/
+- Has its own test file (layer.test.ts)
+- Has its own README.md documenting the contract
+- Can be swapped, disabled, or replaced without touching other layers
+
+No layer may import from a sibling layer directly. All layer communication goes through the pipeline orchestrator (src/services/ocr/pipeline.ts). A layer's output is a layer's input.
+
+If a layer's output is degraded (low confidence, missing data), it must still pass through to the next layer with explicit flags — never silently drop or fabricate.
+
+### Rule 25 — OCR accuracy thresholds are contractual
+
+Every layer declares an accuracy threshold in its README and its test file. The threshold is measured against a curated sample corpus. If a layer's measured accuracy is below its threshold, the layer is not done.
+
+Thresholds are stored in tests/ocr-corpus/thresholds.json and are configurable per org in production, but the default threshold must be met before a layer can be marked complete.
+
+Layer thresholds (defaults):
+- Layer 0 (quality assessment): 95% agreement with human blur/quality judgment on a 200-sample corpus
+- Layer 1 (preprocessing): 90% of preprocessed outputs are usable by Layer 2 (measured by whether Layer 2 produces any regions)
+- Layer 2 (layout): 85% region detection F1 score against labeled samples
+- Layer 2b (table extraction): 80% cell-level accuracy against labeled tables
+- Layer 3 (recognition): 85% character accuracy on printed Bangla, 92% on printed English, 70% on handwritten digits
+- Layer 3b (ensemble): 5% relative improvement over single-engine baseline, measured per engine and per script
+- Layer 4 (extraction): 90% field-level accuracy on known formats
+- Layer 4b (spelling): 30% relative CER reduction from Layer 4 output
+- Layer 5 (validation): 100% of contradictory samples detected
+- Layer 5b (forgery): 80% precision on labeled tampered samples, 95% specificity on labeled authentic samples
+- Layer 6 (confidence): 90% agreement with human confidence rating on a 100-sample corpus
+- Layer 7 (routing): 95% correct routing decisions (auto-pass / review / reject) against human-labeled ground truth
+
+No layer may claim "done" without meeting its threshold. Show the measurement.
+
+### Rule 26 — OCR sample corpus is mandatory
+
+No OCR layer is tested against synthetic or single-source samples. Every layer test runs against a curated corpus in tests/ocr-corpus/ containing:
+
+- Real Bengali and English document layouts (rendered from SVG templates when no physical sample is available)
+- Multiple fonts (minimum 5 per script)
+- Multiple qualities (300 DPI clean, 150 DPI clean, blurred, skewed, low contrast)
+- Ground truth JSON per sample listing expected extracted values
+- A manifest categorizing each sample (document type, quality, script, ground truth)
+
+The corpus must contain at least:
+- 20 SSC/HSC certificates (mixed fonts, mixed quality)
+- 10 NID cards (both sides, multiple layouts)
+- 10 university transcripts
+- 10 bank application forms (structured tables)
+- 10 MCQ answer sheets (OMR — bubble, tick, cross, circle, letter)
+- 10 handwritten application forms
+- 10 Bangla-English mixed documents
+
+Total minimum: 80 samples. Each with ground truth.
+
+If real samples cannot be sourced, generate them from templates that mimic the exact document type. Document the source of every sample in the manifest.
+
+### Rule 27 — No OCR downgrade under any circumstance
+
+If an OCR layer cannot meet its accuracy threshold within the current Part, the Quest stops. It does not proceed to the next layer. It does not weaken the threshold. It does not "defer accuracy improvements". It does not mark the layer as "functional but needs work".
+
+The only acceptable states for an OCR layer:
+- DONE with measured accuracy at or above threshold
+- IN PROGRESS with a specific blocker that requires user input
+
+No third state exists.
+
 ---
 
 **End of master instructions. A Quest instruction follows. Execute it fully.**
