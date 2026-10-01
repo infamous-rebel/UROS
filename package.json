@@ -23,7 +23,7 @@
     "restore": "bash scripts/restore.sh",
     "dr-drill": "bash scripts/dr_drill.sh",
     "audit": "npm audit --omit=dev --audit-level=high",
-    "generate:corpus": "ts-node tests/ocr-corpus/generator/generate.ts"
+    "generate:corpus": "bash tests/ocr-corpus/generator/run.sh"
   },
   "dependencies": {
     "adm-zip": "^0.6.0",
@@ -44,7 +44,7 @@
     "nodemailer": "^10.0.12",
     "pdfkit": "^0.20.2",
     "pg": "^8.11.3",
-    "sharp": "^0.35.5",
+    "sharp": "^0.33.5",
     "tesseract.js": "^5.1.0",
     "winston": "^3.11.0",
     "zod": "^3.22.4"

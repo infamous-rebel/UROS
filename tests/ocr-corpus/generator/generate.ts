@@ -17,15 +17,15 @@ import * as path from 'path';
 const CORPUS = path.resolve(__dirname, '..');
 const DOCS = path.join(CORPUS, 'documents');
 
-// ─── Font Registration ───────────────────────────────────────────────────────
-// Fonts installed to ~/Library/Fonts/ for system-wide access by sharp/libvips.
-// NotoSansBengali (Regular, Bold), HindSiliguri (Regular, Bold) plus system
-// fonts: Bangla MN, Bangla Sangam MN, Kohinoor Bangla, Mukta Mahee.
+// ─── Font Configuration ──────────────────────────────────────────────────────
+// All fonts are bundled in tests/ocr-corpus/templates/fonts/ (OFL-licensed).
+// The run.sh wrapper sets FONTCONFIG_PATH so sharp/libvips finds them on both
+// macOS and Ubuntu CI. No system fonts are used.
 
-// Bangla font families available for rendering (6 fonts, >= 5 required by Rule 26)
-const BANGLA_FONTS = ['NotoSansBengali', 'HindSiliguri', 'Bangla MN', 'Bangla Sangam MN', 'Kohinoor Bangla', 'Mukta Mahee'];
-// English font families available for rendering (4 fonts, >= 3 used)
-const ENGLISH_FONTS = ['Arial', 'Helvetica', 'Georgia', 'Times New Roman'];
+// Bangla font families (5 families, 7 files — >= 5 required by Rule 26)
+const BANGLA_FONTS = ['NotoSansBengali', 'HindSiliguri', 'SolaimanLipi', 'Kalpurush', 'Mukti'];
+// English font families (3 families — >= 3 required)
+const ENGLISH_FONTS = ['Inter', 'Roboto', 'Open Sans'];
 
 // ─── Quality Variants ────────────────────────────────────────────────────────
 
@@ -313,7 +313,7 @@ function generateSSCSvg(data: SampleData): string {
 
   // Title
   elements.push(textEl(W / 2, 220, 'মাধ্যমিক বিদ্যালয় সার্টিফিকেট', { font, size: 26, weight: 'bold', anchor: 'middle' }));
-  elements.push(textEl(W / 2, 250, 'Secondary School Certificate (SSC)', { font: 'Arial', size: 18, anchor: 'middle' }));
+  elements.push(textEl(W / 2, 250, 'Secondary School Certificate (SSC)', { font: 'Inter', size: 18, anchor: 'middle' }));
 
   // Divider
   elements.push(lineEl(80, 270, W - 80, 270, '#1a237e', 2));
@@ -347,7 +347,7 @@ function generateSSCSvg(data: SampleData): string {
   // Footer
   elements.push(lineEl(80, H - 150, W - 80, H - 150, '#000000', 1));
   elements.push(textEl(W - 150, H - 100, 'পরীক্ষা নিয়ন্ত্রক', { font, size: 16, anchor: 'middle' }));
-  elements.push(textEl(W - 150, H - 75, 'Controller of Examinations', { font: 'Arial', size: 12, anchor: 'middle' }));
+  elements.push(textEl(W - 150, H - 75, 'Controller of Examinations', { font: 'Inter', size: 12, anchor: 'middle' }));
 
   // Seal circle
   elements.push(circleEl(150, H - 120, 40, { stroke: '#1a237e', strokeWidth: 2 }));
@@ -371,7 +371,7 @@ function generateHSCSvg(data: SampleData): string {
 
   // Title
   elements.push(textEl(W / 2, 220, 'উচ্চ মাধ্যমিক সার্টিফিকেট', { font, size: 26, weight: 'bold', anchor: 'middle' }));
-  elements.push(textEl(W / 2, 250, 'Higher Secondary Certificate (HSC)', { font: 'Arial', size: 18, anchor: 'middle' }));
+  elements.push(textEl(W / 2, 250, 'Higher Secondary Certificate (HSC)', { font: 'Inter', size: 18, anchor: 'middle' }));
 
   elements.push(lineEl(80, 270, W - 80, 270, '#b71c1c', 2));
 
@@ -424,7 +424,7 @@ function generateNIDSvg(data: SampleData): string {
   // Header bar
   elements.push(rectEl(offsetX, offsetY, cardW, 60, { fill: '#00695c', stroke: 'none' }));
   elements.push(textEl(offsetX + cardW / 2, offsetY + 25, 'জাতীয় পরিচয়পত্র', { font, size: 22, weight: 'bold', fill: '#ffffff', anchor: 'middle' }));
-  elements.push(textEl(offsetX + cardW / 2, offsetY + 48, 'National Identity Card', { font: 'Arial', size: 14, fill: '#ffffff', anchor: 'middle' }));
+  elements.push(textEl(offsetX + cardW / 2, offsetY + 48, 'National Identity Card', { font: 'Inter', size: 14, fill: '#ffffff', anchor: 'middle' }));
 
   // Photo placeholder
   elements.push(rectEl(offsetX + 20, offsetY + 80, 140, 170, { stroke: '#999999', strokeWidth: 1 }));
@@ -452,12 +452,12 @@ function generateNIDSvg(data: SampleData): string {
   elements.push(textEl(offsetX + 180, y + 38, data.address as string, { font, size: 14 }));
 
   // Issue/Expiry
-  elements.push(textEl(offsetX + 20, offsetY + cardH - 50, `Issue: ${data.issue_date}`, { font: 'Arial', size: 12 }));
-  elements.push(textEl(offsetX + 20, offsetY + cardH - 30, `Expiry: ${data.expiry_date}`, { font: 'Arial', size: 12 }));
+  elements.push(textEl(offsetX + 20, offsetY + cardH - 50, `Issue: ${data.issue_date}`, { font: 'Inter', size: 12 }));
+  elements.push(textEl(offsetX + 20, offsetY + cardH - 30, `Expiry: ${data.expiry_date}`, { font: 'Inter', size: 12 }));
 
   // Signature area
   elements.push(lineEl(offsetX + cardW - 200, offsetY + cardH - 60, offsetX + cardW - 30, offsetY + cardH - 60, '#000000', 1));
-  elements.push(textEl(offsetX + cardW - 115, offsetY + cardH - 40, 'Signature', { font: 'Arial', size: 12, anchor: 'middle' }));
+  elements.push(textEl(offsetX + cardW - 115, offsetY + cardH - 40, 'Signature', { font: 'Inter', size: 12, anchor: 'middle' }));
 
   return svgWrap(W, H, elements.join('\n'));
 }
@@ -656,7 +656,7 @@ function generateHandwrittenFormSvg(data: SampleData): string {
 
   // Header
   elements.push(textEl(W / 2, 60, 'আবেদনপত্র', { font, size: 28, weight: 'bold', anchor: 'middle' }));
-  elements.push(textEl(W / 2, 90, 'Application Form', { font: 'Arial', size: 18, anchor: 'middle' }));
+  elements.push(textEl(W / 2, 90, 'Application Form', { font: 'Inter', size: 18, anchor: 'middle' }));
   elements.push(lineEl(60, 110, W - 60, 110, '#000000', 2));
 
   // Form fields with underlines (to simulate fill-in-the-blank)
@@ -880,7 +880,6 @@ async function main() {
   // Write manifest
   const manifestData = {
     version: '1.0.0',
-    generated_at: new Date().toISOString(),
     total_samples: totalSamples,
     document_types: DOC_TYPE_CONFIG.map(c => ({
       type: c.type,
